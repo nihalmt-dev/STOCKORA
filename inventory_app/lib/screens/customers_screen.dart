@@ -239,82 +239,80 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     style: TextStyle(color: muted),
                   ),
                 ),
-                ElevatedButton(
-                  onPressed: saving
-                      ? null
-                      : () async {
-                          if (!formKey.currentState!.validate()) {
-                            return;
-                          }
 
-                          setDialogState(() => saving = true);
+ElevatedButton(
+  onPressed: saving
+      ? null
+      : () async {
+          if (!formKey.currentState!.validate()) {
+            return;
+          }
 
-                          try {
-                            final url = editing
-                                ? 'http://localhost:5000/api/customers/${customer['_id']}'
-                                : 'http://localhost:5000/api/customers';
+          setDialogState(() => saving = true);
 
-                            final response = editing
-                                ? await http.put(
-                                    Uri.parse(url),
-                                    headers: headers,
-                                    body: jsonEncode({
-                                      'name': nameController.text.trim(),
-                                      'email': emailController.text.trim(),
-                                      'phone': phoneController.text.trim(),
-                                      'address':
-                                          addressController.text.trim(),
-                                    }),
-                                  )
-                                : await http.post(
-                                    Uri.parse(url),
-                                    headers: headers,
-                                    body: jsonEncode({
-                                      'name': nameController.text.trim(),
-                                      'email': emailController.text.trim(),
-                                      'phone': phoneController.text.trim(),
-                                      'address':
-                                          addressController.text.trim(),
-                                    }),
-                                  );
+          try {
+            final url = editing
+                ? 'http://localhost:5000/api/customers/${customer['_id']}'
+                : 'http://localhost:5000/api/customers';
 
-                            if (!mounted) return;
+            final response = editing
+                ? await http.put(
+                    Uri.parse(url),
+                    headers: headers,
+                    body: jsonEncode({
+                      'name': nameController.text.trim(),
+                      'email': emailController.text.trim(),
+                      'phone': phoneController.text.trim(),
+                      'address': addressController.text.trim(),
+                    }),
+                  )
+                : await http.post(
+                    Uri.parse(url),
+                    headers: headers,
+                    body: jsonEncode({
+                      'name': nameController.text.trim(),
+                      'email': emailController.text.trim(),
+                      'phone': phoneController.text.trim(),
+                      'address': addressController.text.trim(),
+                    }),
+                  );
 
-                            if (response.statusCode == 200 ||
-                                response.statusCode == 201) {
-                              Navigator.pop(dialogContext);
+            if (!mounted || !dialogContext.mounted) return;
 
-                              showMessage(
-                                editing
-                                    ? 'Customer updated successfully'
-                                    : 'Customer added successfully',
-                                success: true,
-                              );
+            if (response.statusCode == 200 ||
+                response.statusCode == 201) {
+              Navigator.pop(dialogContext);
 
-                              fetchCustomers();
-                            } else {
-                              String message =
-                                  'Unable to save customer';
+              showMessage(
+                editing
+                    ? 'Customer updated successfully'
+                    : 'Customer added successfully',
+                success: true,
+              );
 
-                              try {
-                                final data = jsonDecode(response.body);
-                                message =
-                                    data['message']?.toString() ??
-                                        message;
-                              } catch (_) {}
+              fetchCustomers();
+            } else {
+              String message = 'Unable to save customer';
 
-                              showMessage(message);
-                            }
-                          } catch (error) {
-                            showMessage('Connection error: $error');
-                          } finally {
-                            if (dialogContext.mounted) {
-                              setDialogState(
-                                () => saving = false,
-                              );
-                            }
-                          }
-                        },
+              try {
+                final data = jsonDecode(response.body);
+                message =
+                    data['message']?.toString() ?? message;
+              } catch (_) {}
+
+              showMessage(message);
+            }
+          } catch (error) {
+            if (mounted) {
+              showMessage('Connection error: $error');
+            }
+          } finally {
+            if (dialogContext.mounted) {
+              setDialogState(() => saving = false);
+            }
+          }
+        },
+
                   style: ElevatedButton.styleFrom(
                     backgroundColor: mint,
                     foregroundColor: bg,
@@ -413,304 +411,183 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final email = customer['email']?.toString() ?? '';
     final phone = customer['phone']?.toString() ?? '';
     final address = customer['address']?.toString() ?? '';
-
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: surface,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(19),
         border: Border.all(color: border),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
           CircleAvatar(
-            radius: 23,
-            backgroundColor: mint.withValues(alpha: 0.13),
-            child: Text(
-              name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: const TextStyle(
-                color: mint,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            radius: 24,
+            backgroundColor: mint.withValues(alpha: .13),
+            child: Text(name.isEmpty ? '?' : name[0].toUpperCase(),
+              style: const TextStyle(color: mint, fontSize: 20, fontWeight: FontWeight.w800)),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  email,
-                  style: const TextStyle(
-                    color: muted,
-                    fontSize: 12,
-                  ),
-                ),
-                if (phone.isNotEmpty) ...[
-                  const SizedBox(height: 5),
-                  Text(
-                    phone,
-                    style: const TextStyle(
-                      color: muted,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-                if (address.isNotEmpty) ...[
-                  const SizedBox(height: 5),
-                  Text(
-                    address,
-                    style: const TextStyle(
-                      color: muted,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(name, maxLines: 2, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            const Text('CUSTOMER', style: TextStyle(color: mint, fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
+          ])),
           PopupMenuButton<String>(
             tooltip: 'Customer actions',
-            icon: const Icon(
-              Icons.more_vert,
-              color: muted,
-            ),
+            icon: const Icon(Icons.more_horiz_rounded, color: muted),
             color: surface,
             onSelected: (action) {
-              if (action == 'edit') {
-                showCustomerForm(customer: customer);
-              } else if (action == 'delete') {
-                deleteCustomer(customer);
-              }
+              if (action == 'edit') showCustomerForm(customer: customer);
+              if (action == 'delete') deleteCustomer(customer);
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: 'edit',
-                child: Text(
-                  'Edit Customer',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'delete',
-                child: Text(
-                  'Delete Customer',
-                  style: TextStyle(color: Colors.redAccent),
-                ),
-              ),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'edit', child: Text('Edit Customer', style: TextStyle(color: Colors.white))),
+              PopupMenuItem(value: 'delete', child: Text('Delete Customer', style: TextStyle(color: Colors.redAccent))),
             ],
           ),
+        ]),
+        const SizedBox(height: 16),
+        const Divider(color: border, height: 1),
+        const SizedBox(height: 13),
+        _detailRow(Icons.mail_outline_rounded, email.isEmpty ? 'No email' : email),
+        if (phone.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _detailRow(Icons.phone_outlined, phone),
         ],
-      ),
+        if (address.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _detailRow(Icons.location_on_outlined, address),
+        ],
+      ]),
     );
+  }
+
+  Widget _detailRow(IconData icon, String value) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Icon(icon, size: 17, color: muted),
+      const SizedBox(width: 10),
+      Expanded(child: Text(value, softWrap: true,
+        style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12.5, height: 1.4))),
+    ]);
   }
 
   @override
   Widget build(BuildContext context) {
+    final query = searchQuery.trim().toLowerCase();
     final filteredCustomers = customers.where((customer) {
-      final query = searchQuery.toLowerCase();
-
-      final name =
-          customer['name']?.toString().toLowerCase() ?? '';
-      final email =
-          customer['email']?.toString().toLowerCase() ?? '';
-      final phone =
-          customer['phone']?.toString().toLowerCase() ?? '';
-
-      return name.contains(query) ||
-          email.contains(query) ||
-          phone.contains(query);
+      final name = customer['name']?.toString().toLowerCase() ?? '';
+      final email = customer['email']?.toString().toLowerCase() ?? '';
+      final phone = customer['phone']?.toString().toLowerCase() ?? '';
+      return name.contains(query) || email.contains(query) || phone.contains(query);
     }).toList();
 
     return Scaffold(
       backgroundColor: bg,
-      body: RefreshIndicator(
-        onRefresh: fetchCustomers,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment:
-                    WrapCrossAlignment.center,
-                spacing: 16,
-                runSpacing: 16,
-                children: [
-                  const Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Customers Management',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      SizedBox(height: 6),
-                      Text(
-                        'Manage your customers and contact details',
-                        style: TextStyle(color: muted),
-                      ),
-                    ],
-                  ),
+      body: LayoutBuilder(builder: (context, constraints) {
+        final compact = constraints.maxWidth < 650;
+        final columns = constraints.maxWidth >= 1100 ? 3 : constraints.maxWidth >= 700 ? 2 : 1;
+        return RefreshIndicator(
+          color: mint,
+          onRefresh: fetchCustomers,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(compact ? 16 : 24, 20, compact ? 16 : 24, 36),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 16, runSpacing: 16, children: [
+                  const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Customer Management', style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w800)),
+                    SizedBox(height: 6),
+                    Text('Keep your customer relationships organized', style: TextStyle(color: muted, fontSize: 12)),
+                  ]),
                   ElevatedButton.icon(
                     onPressed: () => showCustomerForm(),
-                    icon: const Icon(Icons.person_add_alt_1),
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 19),
                     label: const Text('Add Customer'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: mint,
-                      foregroundColor: bg,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 16,
-                      ),
-                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: mint, foregroundColor: bg,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   ),
-                ],
-              ),
-              const SizedBox(height: 24),
+                ]),
+              const SizedBox(height: 22),
               Container(
-                padding: const EdgeInsets.all(18),
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: surface,
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: border),
-                ),
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Total Customers: ${customers.length}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    TextField(
-                      controller: searchController,
-                      style: const TextStyle(
-                        color: Colors.white,
-                      ),
-                      onChanged: (value) {
-                        setState(() => searchQuery = value);
-                      },
-                      decoration: InputDecoration(
-                        hintText:
-                            'Search by name, email or phone...',
-                        hintStyle:
-                            const TextStyle(color: muted),
-                        prefixIcon: const Icon(
-                          Icons.search,
-                          color: muted,
-                        ),
-                        filled: true,
-                        fillColor: bg,
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(10),
-                          borderSide:
-                              const BorderSide(color: border),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(10),
-                          borderSide:
-                              const BorderSide(color: mint),
-                        ),
-                      ),
-                    ),
-                  ],
+                  gradient: const LinearGradient(colors: [Color(0xFF1A3C42), surface]),
+                  borderRadius: BorderRadius.circular(19), border: Border.all(color: border)),
+                child: Row(children: [
+                  Container(padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: mint.withValues(alpha: .13), borderRadius: BorderRadius.circular(13)),
+                    child: const Icon(Icons.groups_2_outlined, color: mint, size: 26)),
+                  const SizedBox(width: 15),
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${customers.length}', style: const TextStyle(color: Colors.white, fontSize: 29, fontWeight: FontWeight.w800)),
+                    const Text('Total Customers', style: TextStyle(color: muted, fontSize: 12)),
+                  ]),
+                ]),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(17),
+                decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: border)),
+                child: TextField(
+                  controller: searchController,
+                  onChanged: (value) => setState(() => searchQuery = value),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Search by name, email or phone',
+                    hintStyle: const TextStyle(color: muted, fontSize: 13),
+                    prefixIcon: const Icon(Icons.search_rounded, color: mint),
+                    suffixIcon: searchQuery.isEmpty ? null : IconButton(
+                      onPressed: () { searchController.clear(); setState(() => searchQuery = ''); },
+                      icon: const Icon(Icons.close_rounded, color: muted)),
+                    filled: true, fillColor: bg,
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: border)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: mint)),
+                  ),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 22),
+              Row(children: [
+                const Expanded(child: Text('Customer Directory', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800))),
+                if (!loading && errorMessage == null)
+                  Text('${filteredCustomers.length} shown', style: const TextStyle(color: muted, fontSize: 12)),
+              ]),
+              const SizedBox(height: 14),
               if (loading)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(35),
-                    child: CircularProgressIndicator(
-                      color: mint,
-                    ),
-                  ),
-                )
+                const Center(child: Padding(padding: EdgeInsets.all(38), child: CircularProgressIndicator(color: mint)))
               else if (errorMessage != null)
-                Center(
-                  child: Column(
-                    children: [
-                      Text(
-                        errorMessage!,
-                        style: const TextStyle(
-                          color: Colors.redAccent,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        onPressed: fetchCustomers,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                )
+                Center(child: Column(children: [
+                  Text(errorMessage!, style: const TextStyle(color: Colors.redAccent)),
+                  const SizedBox(height: 12),
+                  OutlinedButton(onPressed: fetchCustomers, child: const Text('Retry')),
+                ]))
               else if (filteredCustomers.isEmpty)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(35),
-                    child: Text(
-                      'No customers found',
-                      style: TextStyle(color: muted),
-                    ),
-                  ),
-                )
+                Container(width: double.infinity, padding: const EdgeInsets.all(40),
+                  decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: border)),
+                  child: Column(children: [
+                    const Icon(Icons.person_search_rounded, color: muted, size: 40),
+                    const SizedBox(height: 12),
+                    Text(customers.isEmpty ? 'No customers yet' : 'No matching customers',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 6),
+                    Text(customers.isEmpty ? 'Add your first customer to get started' : 'Try another search term',
+                      textAlign: TextAlign.center, style: const TextStyle(color: muted, fontSize: 12)),
+                  ]))
               else
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final columns =
-                        constraints.maxWidth >= 900 ? 2 : 1;
-
-                    return GridView.builder(
-                      shrinkWrap: true,
-                      physics:
-                          const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        crossAxisSpacing: 14,
-                        mainAxisSpacing: 14,
-                        mainAxisExtent: 155,
-                      ),
-                      itemCount: filteredCustomers.length,
-                      itemBuilder: (context, index) {
-                        return customerCard(
-                          Map<String, dynamic>.from(
-                            filteredCustomers[index],
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-            ],
+                // Wrap lets cards grow naturally for long names, emails and addresses.
+                Wrap(spacing: 14, runSpacing: 14,
+                  children: filteredCustomers.map((item) {
+                    final cardWidth = (constraints.maxWidth - (compact ? 32 : 48) - 14 * (columns - 1)) / columns;
+                    return SizedBox(width: cardWidth,
+                      child: customerCard(Map<String, dynamic>.from(item)));
+                  }).toList()),
+            ]),
           ),
-        ),
-      ),
+        );
+      }),
     );
   }
 }

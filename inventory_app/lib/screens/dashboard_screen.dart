@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'products_screen.dart';
 import 'inventory_screen.dart';
 import 'customers_screen.dart';
 import 'orders_screen.dart';
 import 'reports_screen.dart';
+import 'login_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String token;
@@ -32,6 +34,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static const borderColor = Color(0xFF29384D);
 
   int selectedIndex = 0;
+  bool openLowStockOnly = false;
   bool isLoading = true;
   String? errorMessage;
   Map<String, dynamic> stats = {};
@@ -90,7 +93,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  void changePage(int index, {bool closeDrawer = false}) {
+  void changePage(int index, {bool closeDrawer = false, bool lowStockOnly = false}) {
+    if (index == 1) {
+      setState(() => openLowStockOnly = lowStockOnly);
+    }
     if (index == selectedIndex) {
       if (closeDrawer && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
@@ -169,6 +175,107 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     changePage(index);
                   },
                 ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: surface,
+        title: const Text('Logout?', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Are you sure you want to logout from STOCKORA?',
+          style: TextStyle(color: muted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel', style: TextStyle(color: mint)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: mint,
+              foregroundColor: bg,
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('auth_token');
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Logout failed. Please try again.')),
+      );
+    }
+  }
+
+  void showProfileMenu() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: sidebarBg,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: Color(0xFF254D49),
+                  child: Icon(Icons.person_outline, color: mint, size: 27),
+                ),
+                SizedBox(width: 14),
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('STOCKORA Workspace', style: TextStyle(
+                    color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+                  SizedBox(height: 4),
+                  Text('Signed in', style: TextStyle(color: mint, fontSize: 12)),
+                ]),
+              ]),
+              const SizedBox(height: 18),
+              const Divider(color: borderColor),
+              ListTile(
+                leading: const Icon(Icons.space_dashboard_outlined, color: mint),
+                title: const Text('Dashboard', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  changePage(0);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+                title: const Text('Logout', style: TextStyle(color: Colors.redAccent)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  logout();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.close_rounded, color: muted),
+                title: const Text('Close', style: TextStyle(color: Colors.white)),
+                onTap: () => Navigator.pop(sheetContext),
+              ),
             ],
           ),
         ),
@@ -319,6 +426,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           ...List.generate(menuItems.length, menuTile),
           const Spacer(),
+          ListTile(
+            leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+            title: const Text('Logout', style: TextStyle(
+              color: Colors.redAccent,
+              fontWeight: FontWeight.w600,
+            )),
+            onTap: logout,
+          ),
           const Divider(color: borderColor),
           const Padding(
             padding: EdgeInsets.symmetric(
@@ -374,8 +489,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required IconData icon,
     required Color accent,
     required String subtitle,
+    required VoidCallback onTap,
   }) {
-    return Container(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -414,6 +533,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: muted, fontSize: 10)),
         ],
+      ),
       ),
     );
   }
@@ -773,6 +893,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.fromLTRB(compact ? 16 : 26, 18, compact ? 16 : 26, 36),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (compact) ...[
+              const Text('Dashboard Overview', style: TextStyle(
+                color: Colors.white, fontSize: 23, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 5),
+              const Text('Your business, at a glance',
+                style: TextStyle(color: muted, fontSize: 12)),
+              const SizedBox(height: 22),
+            ] else ...[
             Container(
               width: double.infinity,
               padding: EdgeInsets.all(compact ? 21 : 27),
@@ -819,6 +947,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ]),
             ),
             const SizedBox(height: 27),
+            ],
             Row(children: [
               const Expanded(child: Text('Key metrics', style: TextStyle(color: Colors.white,
                 fontSize: 19, fontWeight: FontWeight.w800))),
@@ -834,37 +963,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 kpiCard(title: 'Total Products', value: '${stats['totalProducts'] ?? 0}',
                   icon: Icons.inventory_2_outlined, accent: mint,
-                  subtitle: 'In your catalog'),
+                  subtitle: 'In your catalog', onTap: () => changePage(1)),
                 kpiCard(title: 'Total Orders', value: '${stats['totalOrders'] ?? 0}',
                   icon: Icons.shopping_bag_outlined, accent: const Color(0xFF80B5FF),
-                  subtitle: 'Orders recorded'),
+                  subtitle: 'Orders recorded', onTap: () => changePage(4)),
                 kpiCard(title: 'Total Sales', value: '₹${stats['totalSales'] ?? 0}',
                   icon: Icons.payments_outlined, accent: const Color(0xFFFFCB75),
-                  subtitle: 'Revenue to date'),
+                  subtitle: 'Revenue to date', onTap: () => changePage(5)),
                 kpiCard(title: 'Low Stock Alerts', value: '${stats['lowStockCount'] ?? 0}',
                   icon: Icons.warning_amber_rounded, accent: const Color(0xFFFF9F77),
-                  subtitle: 'Need attention'),
+                  subtitle: 'Need attention', onTap: () => changePage(1, lowStockOnly: true)),
               ],
             ),
-            const SizedBox(height: 27),
-            const Text('Quick access', style: TextStyle(color: Colors.white,
-              fontSize: 19, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 13),
-            Row(children: [
-              Expanded(child: quickAction(title: 'Inventory', icon: Icons.warehouse_outlined,
-                page: 2, accent: mint)),
-              const SizedBox(width: 12),
-              Expanded(child: quickAction(title: 'Customers', icon: Icons.people_outline_rounded,
-                page: 3, accent: const Color(0xFF80B5FF))),
-            ]),
-            const SizedBox(height: 12),
-            Row(children: [
-              Expanded(child: quickAction(title: 'Orders', icon: Icons.receipt_long_outlined,
-                page: 4, accent: const Color(0xFFFFCB75))),
-              const SizedBox(width: 12),
-              Expanded(child: quickAction(title: 'Reports', icon: Icons.bar_chart_rounded,
-                page: 5, accent: const Color(0xFFBB9BFF))),
-            ]),
+            if (width < 800) ...[
+              const SizedBox(height: 24),
+              const Text('Quick access', style: TextStyle(
+                color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 13),
+              Row(children: [
+                Expanded(child: quickAction(title: 'Products',
+                  icon: Icons.inventory_2_outlined, page: 1, accent: mint)),
+                const SizedBox(width: 12),
+                Expanded(child: quickAction(title: 'Inventory',
+                  icon: Icons.warehouse_outlined, page: 2,
+                  accent: const Color(0xFF80B5FF))),
+              ]),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: quickAction(title: 'Customers',
+                  icon: Icons.people_outline_rounded, page: 3,
+                  accent: const Color(0xFFFFCB75))),
+                const SizedBox(width: 12),
+                Expanded(child: quickAction(title: 'Orders',
+                  icon: Icons.shopping_bag_outlined, page: 4,
+                  accent: const Color(0xFFBB9BFF))),
+              ]),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: quickAction(title: 'Reports',
+                  icon: Icons.bar_chart_rounded, page: 5,
+                  accent: const Color(0xFFFF9F77))),
+                const Expanded(child: SizedBox.shrink()),
+              ]),
+            ],
             const SizedBox(height: 27),
             if (width >= 800)
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -924,10 +1065,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
               icon: const Icon(Icons.refresh_rounded, color: muted),
             ),
             const SizedBox(width: 4),
-            const CircleAvatar(
-              radius: 17,
-              backgroundColor: Color(0xFF254D49),
-              child: Icon(Icons.person_outline, color: mint, size: 20),
+            IconButton(
+              tooltip: 'Logout',
+              onPressed: logout,
+              icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: 'Workspace profile',
+              onPressed: showProfileMenu,
+              icon: const CircleAvatar(
+                radius: 17,
+                backgroundColor: Color(0xFF254D49),
+                child: Icon(Icons.person_outline, color: mint, size: 20),
+              ),
             ),
             const SizedBox(width: 16),
           ],
@@ -941,7 +1092,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: selectedIndex == 0
                   ? dashboardContent()
                   : selectedIndex == 1
-                      ? ProductsScreen(token: widget.token)
+                      ? ProductsScreen(
+                           key: ValueKey(openLowStockOnly),
+                           token: widget.token,
+                           initialLowStockOnly: openLowStockOnly,
+                         )
                       : selectedIndex == 2
                           ? InventoryScreen(token: widget.token)
                           : selectedIndex == 3

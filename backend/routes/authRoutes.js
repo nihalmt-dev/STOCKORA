@@ -6,24 +6,28 @@ const User = require("../models/User");
 
 const router = express.Router();
 
-// Register new user
+const normalizeEmail = (email) =>
+  typeof email === "string" ? email.trim().toLowerCase() : "";
+
+// Public registration: staff only.
+// Admin and Manager accounts must be created through a protected process.
 router.post("/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    if (!name?.trim() || !email?.trim() || !password) {
+    if (
+      typeof name !== "string" ||
+      !name.trim() ||
+      !normalizeEmail(email) ||
+      typeof password !== "string" ||
+      password.length < 8
+    ) {
       return res.status(400).json({
-        message: "All fields are required",
+        message: "Valid name, email and password (minimum 8 characters) are required",
       });
     }
 
-    if (password.length < 8) {
-      return res.status(400).json({
-        message: "Password must contain at least 8 characters",
-      });
-    }
-
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
 
     const existingUser = await User.findOne({
       email: normalizedEmail,
@@ -42,9 +46,10 @@ router.post("/register", async (req, res) => {
       email: normalizedEmail,
       password: hashedPassword,
       role: "staff",
+      isActive: true,
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Registration successful",
       user: {
         id: user._id,
@@ -55,41 +60,36 @@ router.post("/register", async (req, res) => {
     });
   } catch (error) {
     console.error("Registration error:", error.message);
-    res.status(500).json({
+    return res.status(500).json({
       message: "Registration failed",
     });
   }
 });
 
-// Login existing user
+// Same login endpoint for Admin, Manager and Staff.
 router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const password = req.body.password;
 
-    if (!email || !password) {
+    if (!email || typeof password !== "string" || !password) {
       return res.status(400).json({
         message: "Email and password are required",
       });
     }
 
-    const user = await User.findOne({
-      email: email.trim().toLowerCase(),
-    }).select("+password");
+    const user = await User.findOne({ email }).select("+password");
 
-    if (!user) {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({
         message: "Invalid email or password",
       });
     }
 
-    const passwordMatches = await bcrypt.compare(
-      password,
-      user.password
-    );
-
-    if (!passwordMatches) {
-      return res.status(401).json({
-        message: "Invalid email or password",
+    // Existing users without isActive are considered active.
+    if (user.isActive === false) {
+      return res.status(403).json({
+        message: "Your account has been deactivated",
       });
     }
 
@@ -108,7 +108,7 @@ router.post("/login", async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    res.json({
+    return res.json({
       message: "Login successful",
       token,
       user: {
@@ -120,7 +120,7 @@ router.post("/login", async (req, res) => {
     });
   } catch (error) {
     console.error("Login error:", error.message);
-    res.status(500).json({
+    return res.status(500).json({
       message: "Login failed",
     });
   }

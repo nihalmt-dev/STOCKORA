@@ -6,20 +6,24 @@ const { protect, authorize } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-// All product routes require login
+// All product routes require authentication
 router.use(protect);
 
 // GET all products + search
-router.get("/", async (req, res) => {
+// Admin, Manager and Staff
+router.get("/", authorize("admin", "manager", "staff"), async (req, res) => {
   try {
     const search = String(req.query.search || "").trim();
 
-    const filter = search
+    // Escape regex special characters in search input
+    const safeSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    const filter = safeSearch
       ? {
           $or: [
-            { name: { $regex: search, $options: "i" } },
-            { sku: { $regex: search, $options: "i" } },
-            { category: { $regex: search, $options: "i" } },
+            { name: { $regex: safeSearch, $options: "i" } },
+            { sku: { $regex: safeSearch, $options: "i" } },
+            { category: { $regex: safeSearch, $options: "i" } },
           ],
         }
       : {};
@@ -30,6 +34,7 @@ router.get("/", async (req, res) => {
 
     res.json(products);
   } catch (error) {
+    console.error("Fetch products error:", error.message);
     res.status(500).json({
       message: "Failed to fetch products",
     });
@@ -37,7 +42,8 @@ router.get("/", async (req, res) => {
 });
 
 // GET single product
-router.get("/:id", async (req, res) => {
+// Admin, Manager and Staff
+router.get("/:id", authorize("admin", "manager", "staff"), async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({
@@ -55,14 +61,16 @@ router.get("/:id", async (req, res) => {
 
     res.json(product);
   } catch (error) {
+    console.error("Fetch product error:", error.message);
     res.status(500).json({
       message: "Failed to fetch product",
     });
   }
 });
 
-// POST add product - Admin only
-router.post("/", authorize("admin"), async (req, res) => {
+// POST add product
+// Admin and Manager
+router.post("/", authorize("admin", "manager"), async (req, res) => {
   try {
     const {
       name,
@@ -101,14 +109,16 @@ router.post("/", authorize("admin"), async (req, res) => {
       });
     }
 
+    console.error("Add product error:", error.message);
     res.status(500).json({
       message: "Failed to add product",
     });
   }
 });
 
-// PUT update product - Admin only
-router.put("/:id", authorize("admin"), async (req, res) => {
+// PUT update product
+// Admin and Manager
+router.put("/:id", authorize("admin", "manager"), async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({
@@ -121,20 +131,15 @@ router.put("/:id", authorize("admin"), async (req, res) => {
       "sku",
       "category",
       "price",
-      "stock",
       "lowStockThreshold",
       "description",
     ];
 
+    // Stock changes must use the inventory API.
     const updates = {};
 
     for (const field of allowedFields) {
-      if (
-        Object.prototype.hasOwnProperty.call(
-          req.body,
-          field
-        )
-      ) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
         updates[field] = req.body[field];
       }
     }
@@ -171,13 +176,15 @@ router.put("/:id", authorize("admin"), async (req, res) => {
       });
     }
 
+    console.error("Update product error:", error.message);
     res.status(500).json({
       message: "Failed to update product",
     });
   }
 });
 
-// DELETE product - Admin only
+// DELETE product
+// Admin only
 router.delete("/:id", authorize("admin"), async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
@@ -186,9 +193,7 @@ router.delete("/:id", authorize("admin"), async (req, res) => {
       });
     }
 
-    const product = await Product.findByIdAndDelete(
-      req.params.id
-    );
+    const product = await Product.findByIdAndDelete(req.params.id);
 
     if (!product) {
       return res.status(404).json({
@@ -200,6 +205,7 @@ router.delete("/:id", authorize("admin"), async (req, res) => {
       message: "Product deleted successfully",
     });
   } catch (error) {
+    console.error("Delete product error:", error.message);
     res.status(500).json({
       message: "Failed to delete product",
     });

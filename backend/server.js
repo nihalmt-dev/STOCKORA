@@ -11,6 +11,10 @@ const customerRoutes = require("./routes/customerRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const reportRoutes = require("./routes/reportRoutes");
+
+// Admin User Management
+const userRoutes = require("./routes/users");
+
 const app = express();
 
 app.use(cors());
@@ -31,6 +35,9 @@ app.use("/api/customers", customerRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/reports", reportRoutes);
+
+// Admin-only User Management API
+app.use("/api/users", userRoutes);
 
 const PORT = process.env.PORT || 5000;
 

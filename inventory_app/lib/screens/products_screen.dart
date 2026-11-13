@@ -6,10 +6,12 @@ import 'add_product_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
   final String token;
+  final bool initialLowStockOnly;
 
   const ProductsScreen({
     super.key,
     required this.token,
+    this.initialLowStockOnly = false,
   });
 
   @override
@@ -26,10 +28,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
   String? errorMessage;
   String? busyProductId;
   String searchQuery = '';
+  bool showLowStockOnly = false;
 
   @override
   void initState() {
     super.initState();
+    showLowStockOnly = widget.initialLowStockOnly;
     fetchProducts();
   }
 
@@ -522,50 +526,63 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF101B2C),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.category_outlined,
-                      size: 15, color: Color(0xFF98A9BD)),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Text(category,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: Color(0xFFBECAD8), fontSize: 12)),
-                  ),
-                  Text('Alert at ≤ $threshold',
-                      style: const TextStyle(
-                          color: Color(0xFF98A9BD), fontSize: 11)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            const Divider(height: 1, color: Color(0xFF2B3B50)),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: busy ? null : () => editProduct(product),
-                    icon: const Icon(Icons.edit_outlined, size: 17),
-                    label: const Text('Edit product'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: mint,
-                      side: const BorderSide(color: Color(0xFF355C58)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(11)),
-                    ),
-                  ),
-                ),
+
+const SizedBox(height: 14),
+Container(
+  padding: const EdgeInsets.symmetric(
+    horizontal: 10,
+    vertical: 8,
+  ),
+  decoration: BoxDecoration(
+    color: const Color(0xFF101B2C),
+    borderRadius: BorderRadius.circular(9),
+  ),
+  child: Row(
+    children: [
+      const Icon(
+        Icons.category_outlined,
+        size: 15,
+        color: Color(0xFF98A9BD),
+      ),
+      const SizedBox(width: 7),
+      Expanded(
+        child: Text(
+          category,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFFBECAD8),
+            fontSize: 12,
+          ),
+        ),
+      ),
+    ],
+  ),
+),
+const SizedBox(height: 14),
+const Divider(
+  height: 1,
+  color: Color(0xFF2B3B50),
+),
+const SizedBox(height: 12),
+Row(
+  children: [
+    Expanded(
+      child: OutlinedButton.icon(
+        onPressed: busy ? null : () => editProduct(product),
+        icon: const Icon(Icons.edit_outlined, size: 17),
+        label: const Text('Edit product'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: mint,
+          side: const BorderSide(color: Color(0xFF355C58)),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(11),
+          ),
+        ),
+      ),
+    ),
+
                 const SizedBox(width: 10),
                 OutlinedButton.icon(
                   onPressed: busy ? null : () => deleteProduct(product),
@@ -593,9 +610,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final filtered = products.where((product) {
       final item = Map<String, dynamic>.from(product);
       final q = searchQuery.toLowerCase();
-      return (item['name']?.toString() ?? '').toLowerCase().contains(q) ||
+      final stock = int.tryParse(item['stock']?.toString() ?? '') ?? 0;
+      final threshold = int.tryParse(
+            item['lowStockThreshold']?.toString() ?? '') ?? 5;
+      final matchesSearch =
+          (item['name']?.toString() ?? '').toLowerCase().contains(q) ||
           (item['sku']?.toString() ?? '').toLowerCase().contains(q) ||
           (item['category']?.toString() ?? '').toLowerCase().contains(q);
+      return matchesSearch && (!showLowStockOnly || stock <= threshold);
     }).toList();
     final lowCount = products.where((product) {
       final item = Map<String, dynamic>.from(product);
@@ -665,18 +687,28 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           const SizedBox(height: 20),
                           Row(children: [
                             Expanded(
-                              child: _summaryChip(
-                                  Icons.inventory_2_outlined,
-                                  '${products.length}',
-                                  'Products', mint),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(15),
+                                onTap: () => setState(() => showLowStockOnly = false),
+                                child: _summaryChip(
+                                    Icons.inventory_2_outlined,
+                                    '${products.length}',
+                                    'Products', mint,
+                                    selected: !showLowStockOnly),
+                              ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: _summaryChip(
-                                  Icons.warning_amber_rounded,
-                                  '$lowCount',
-                                  'Low stock',
-                                  const Color(0xFFFFC078)),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(15),
+                                onTap: () => setState(() => showLowStockOnly = true),
+                                child: _summaryChip(
+                                    Icons.warning_amber_rounded,
+                                    '$lowCount',
+                                    'Low stock',
+                                    const Color(0xFFFFC078),
+                                    selected: showLowStockOnly),
+                              ),
                             ),
                           ]),
                           const SizedBox(height: 18),
@@ -725,6 +757,23 @@ class _ProductsScreenState extends State<ProductsScreen> {
                             ),
                           ),
                           const SizedBox(height: 22),
+                          if (showLowStockOnly) ...[
+                            Row(children: [
+                              const Expanded(
+                                child: Text('Showing low-stock products',
+                                    style: TextStyle(
+                                        color: Color(0xFFFFC078),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700)),
+                              ),
+                              TextButton(
+                                onPressed: () => setState(() => showLowStockOnly = false),
+                                child: const Text('Show All',
+                                    style: TextStyle(color: mint)),
+                              ),
+                            ]),
+                            const SizedBox(height: 8),
+                          ],
                           Row(children: [
                             const Expanded(
                               child: Text('Product catalog',
@@ -752,7 +801,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                 const SizedBox(height: 12),
                                 Text(products.isEmpty
                                     ? 'No products added yet'
-                                    : 'No matching products',
+                                    : showLowStockOnly && searchQuery.isEmpty
+                                        ? 'No low-stock products'
+                                        : 'No matching products',
                                     style: const TextStyle(
                                         color: Colors.white70)),
                               ]),
@@ -785,13 +836,17 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   Widget _summaryChip(
-      IconData icon, String value, String label, Color accent) {
+      IconData icon, String value, String label, Color accent,
+      {bool selected = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 15),
       decoration: BoxDecoration(
         color: card,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0xFF2B3B50)),
+        border: Border.all(
+          color: selected ? accent : const Color(0xFF2B3B50),
+          width: selected ? 1.5 : 1,
+        ),
       ),
       child: Row(children: [
         Container(

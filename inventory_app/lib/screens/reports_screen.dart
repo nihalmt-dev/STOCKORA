@@ -165,51 +165,61 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
   }
 
+  Widget panel({required Widget child, EdgeInsets? padding}) => Container(
+    width: double.infinity,
+    padding: padding ?? const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: surface,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: border),
+    ),
+    child: child,
+  );
+
   Widget metricCard({
     required String title,
     required String value,
+    required String subtitle,
     required IconData icon,
     required Color color,
   }) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(15),
+        gradient: LinearGradient(
+          colors: [color.withValues(alpha: .12), surface],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
+              color: color.withValues(alpha: .14),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: color),
+            child: Icon(icon, color: color, size: 21),
           ),
           const Spacer(),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 25,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+            child: Text(value, style: const TextStyle(
+              color: Colors.white, fontSize: 25, fontWeight: FontWeight.w800,
+            )),
           ),
-          const SizedBox(height: 7),
-          Text(
-            title,
-            style: const TextStyle(
-              color: muted,
-              fontSize: 12,
-            ),
-          ),
+          const SizedBox(height: 6),
+          Text(title, style: const TextStyle(
+            color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12,
+          )),
+          const SizedBox(height: 3),
+          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: muted, fontSize: 11)),
         ],
       ),
     );
@@ -217,366 +227,272 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Widget sectionCard({
     required String title,
+    required String subtitle,
     required IconData icon,
     required Widget child,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: mint),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
+  }) => panel(child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(children: [
+        Container(
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: mint.withValues(alpha: .12),
+            borderRadius: BorderRadius.circular(10),
           ),
-          const SizedBox(height: 20),
-          child,
-        ],
-      ),
-    );
-  }
+          child: Icon(icon, color: mint, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16,
+            )),
+            const SizedBox(height: 3),
+            Text(subtitle, style: const TextStyle(color: muted, fontSize: 11)),
+          ],
+        )),
+      ]),
+      const SizedBox(height: 20),
+      child,
+    ],
+  ));
 
   Widget salesChart() {
     if (sales.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(25),
-        child: Center(
-          child: Text(
-            'No completed sales available',
-            style: TextStyle(color: muted),
-          ),
-        ),
+      return const SizedBox(
+        height: 175,
+        child: Center(child: Text('No sales data available yet',
+          style: TextStyle(color: muted))),
       );
     }
-
-    final displayedSales =
-        sales.length > 7
-            ? sales.sublist(sales.length - 7)
-            : sales;
-
-    double maxValue = 0;
-
-    for (final entry in displayedSales) {
+    // Sort the daily aggregates so the most recent seven days appear in order.
+    final sorted = List<dynamic>.from(sales)
+      ..sort((a, b) => (a is Map ? a['_id'] : '').toString()
+          .compareTo((b is Map ? b['_id'] : '').toString()));
+    final recent = sorted.length > 7 ? sorted.sublist(sorted.length - 7) : sorted;
+    double maxSales = 0;
+    for (final entry in recent) {
       if (entry is Map) {
-        final value = toDouble(entry['totalSales']);
-        if (value > maxValue) maxValue = value;
+        final amount = toDouble(entry['totalSales']);
+        if (amount > maxSales) maxSales = amount;
       }
     }
-
-    return SizedBox(
-      height: 245,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: displayedSales.map((entry) {
-          final item = entry is Map
-              ? entry
-              : <String, dynamic>{};
-
-          final value = toDouble(item['totalSales']);
-
-          final ratio =
-              maxValue == 0 ? 0.02 : value / maxValue;
-
-          final date = item['_id']?.toString() ?? '';
-
-          final label = date.length >= 10
-              ? date.substring(5)
-              : date;
-
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 6,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text(
-                    '₹${value.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                      color: muted,
-                      fontSize: 11,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Daily sales · Last 7 reported days',
+          style: TextStyle(color: muted, fontSize: 12)),
+        const SizedBox(height: 18),
+        SizedBox(
+          height: 230,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: recent.map((entry) {
+              final item = entry is Map ? entry : <String, dynamic>{};
+              final amount = toDouble(item['totalSales']);
+              final date = item['_id']?.toString() ?? '';
+              final label = date.length >= 10 ? date.substring(5) : date;
+              final fraction = maxSales <= 0 ? 0.0 : amount / maxSales;
+              return Expanded(child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Tooltip(
+                      message: money(amount),
+                      child: Text('₹${amount.toStringAsFixed(0)}',
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: muted, fontSize: 10)),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                   height: 165.0 * ratio.clamp(0.02, 1.0).toDouble(),
-                    decoration: const BoxDecoration(
-                      color: mint,
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(7),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      height: 155 * fraction.clamp(0.02, 1.0).toDouble(),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [mint, Color(0xFF218F80)],
+                        ),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 9),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      color: muted,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+                    const SizedBox(height: 10),
+                    Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: muted, fontSize: 10)),
+                  ],
+                ),
+              ));
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 
   Widget inventoryTable() {
     if (inventory.isEmpty) {
-      return const Text(
-        'No inventory data available',
-        style: TextStyle(color: muted),
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 30),
+        child: Center(child: Text('No inventory data available',
+          style: TextStyle(color: muted))),
       );
     }
-
-    return Column(
-      children: inventory.map((entry) {
-        final product = entry is Map
-            ? entry
-            : <String, dynamic>{};
-
-        final name =
-            product['name']?.toString() ?? 'Product';
-
+    return Column(children: [
+      const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Row(children: [
+          Expanded(flex: 4, child: Text('PRODUCT', style: TextStyle(
+            color: muted, fontSize: 10, fontWeight: FontWeight.w800))),
+          Expanded(flex: 2, child: Text('STOCK', textAlign: TextAlign.center,
+            style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w800))),
+          Expanded(flex: 3, child: Text('VALUE', textAlign: TextAlign.end,
+            style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w800))),
+          SizedBox(width: 32),
+        ]),
+      ),
+      const Divider(color: border, height: 1),
+      ...inventory.map((entry) {
+        final product = entry is Map ? entry : <String, dynamic>{};
+        final name = product['name']?.toString() ?? 'Product';
         final stock = toInt(product['stock']);
-
-        final value = toDouble(
-          product['stockValue'],
+        final value = toDouble(product['stockValue']);
+        final low = product['lowStock'] == true;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          child: Row(children: [
+            Expanded(flex: 4, child: Text(name,
+              maxLines: 2, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontSize: 12,
+                fontWeight: FontWeight.w600))),
+            Expanded(flex: 2, child: Text('$stock', textAlign: TextAlign.center,
+              style: const TextStyle(color: muted, fontSize: 12))),
+            Expanded(flex: 3, child: FittedBox(
+              fit: BoxFit.scaleDown, alignment: Alignment.centerRight,
+              child: Text(money(value), style: const TextStyle(
+                color: mint, fontWeight: FontWeight.w700, fontSize: 12)),
+            )),
+            SizedBox(width: 32, child: Tooltip(
+              message: low ? 'Low stock' : 'Stock sufficient',
+              child: Icon(low ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+                size: 18, color: low ? Colors.orangeAccent : mint),
+            )),
+          ]),
         );
-
-        final isLowStock =
-            product['lowStock'] == true;
-
-        return Container(
-          padding: const EdgeInsets.symmetric(
-            vertical: 13,
-          ),
-          decoration: const BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: border),
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: Text(
-                  name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  '$stock',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: muted,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  money(value),
-                  textAlign: TextAlign.end,
-                  style: const TextStyle(
-                    color: mint,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Icon(
-                isLowStock
-                    ? Icons.warning_amber_rounded
-                    : Icons.check_circle_outline,
-                color: isLowStock
-                    ? Colors.orangeAccent
-                    : mint,
-                size: 18,
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
+      }),
+    ]);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (loading) {
-      return const Scaffold(
-        backgroundColor: bg,
-        body: Center(
-          child: CircularProgressIndicator(color: mint),
-        ),
-      );
-    }
-
-    if (errorMessage != null) {
-      return Scaffold(
-        backgroundColor: bg,
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Unable to load reports',
-                style: TextStyle(color: Colors.white),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: loadReports,
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: bg,
       body: RefreshIndicator(
         onRefresh: loadReports,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth;
-
-            final columns = width >= 950
-                ? 4
-                : (width >= 500 ? 2 : 1);
-
-            return SingleChildScrollView(
-              physics:
-                  const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 12,
-                    crossAxisAlignment:
-                        WrapCrossAlignment.center,
-                    children: [
-                      const Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Reports & Analytics',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          SizedBox(height: 6),
-                          Text(
-                            'Business performance and inventory insights',
-                            style: TextStyle(color: muted),
-                          ),
-                        ],
+        color: mint,
+        child: LayoutBuilder(builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final horizontalPadding = width < 600 ? 16.0 : 24.0;
+          final columns = width >= 1000 ? 4 : 2;
+          return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.all(horizontalPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 16, runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Reports & Analytics', style: TextStyle(
+                          color: Colors.white, fontSize: 25, fontWeight: FontWeight.w800)),
+                        SizedBox(height: 5),
+                        Text('Business performance and inventory insights',
+                          style: TextStyle(color: muted, fontSize: 12)),
+                      ],
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: loading ? null : loadReports,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('Refresh'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: mint,
+                        side: const BorderSide(color: border),
                       ),
-                      OutlinedButton.icon(
-                        onPressed: loadReports,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Refresh'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: mint,
-                          side: const BorderSide(
-                            color: border,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                if (loading)
+                  const Padding(
+                    padding: EdgeInsets.all(50),
+                    child: Center(child: CircularProgressIndicator(color: mint)),
+                  )
+                else if (errorMessage != null)
+                  panel(child: Column(children: [
+                    const Icon(Icons.error_outline, color: Colors.orangeAccent, size: 32),
+                    const SizedBox(height: 12),
+                    const Text('Unable to load reports', style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 6),
+                    Text(errorMessage!, textAlign: TextAlign.center,
+                      style: const TextStyle(color: muted, fontSize: 12)),
+                    const SizedBox(height: 12),
+                    ElevatedButton(onPressed: loadReports, child: const Text('Retry')),
+                  ]))
+                else ...[
                   GridView.count(
                     crossAxisCount: columns,
                     shrinkWrap: true,
-                    physics:
-                        const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 14,
-                    crossAxisSpacing: 14,
-                    mainAxisExtent: 155,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    mainAxisExtent: width < 600 ? 180 : 155,
                     children: [
-                      metricCard(
-                        title: 'Total Revenue',
-                        value: money(totalRevenue),
-                        icon:
-                            Icons.currency_rupee_rounded,
-                        color: mint,
-                      ),
-                      metricCard(
-                        title: 'Total Orders',
-                        value: '$totalOrders',
-                        icon:
-                            Icons.shopping_bag_outlined,
-                        color: const Color(0xFF73A9FF),
-                      ),
-                      metricCard(
-                        title: 'Inventory Value',
-                        value: money(totalStockValue),
-                        icon:
-                            Icons.inventory_2_outlined,
-                        color: const Color(0xFFFFCB66),
-                      ),
-                      metricCard(
-                        title: 'Low Stock Items',
-                        value: '$lowStockCount',
-                        icon:
-                            Icons.warning_amber_rounded,
-                        color: Colors.orangeAccent,
-                      ),
+                      metricCard(title: 'Total Revenue', value: money(totalRevenue),
+                        subtitle: 'Sales to date', icon: Icons.currency_rupee_rounded, color: mint),
+                      metricCard(title: 'Total Orders', value: '$totalOrders',
+                        subtitle: 'Orders recorded', icon: Icons.shopping_bag_outlined,
+                        color: const Color(0xFF73A9FF)),
+                      metricCard(title: 'Inventory Value', value: money(totalStockValue),
+                        subtitle: 'Current stock worth', icon: Icons.inventory_2_outlined,
+                        color: const Color(0xFFFFCB66)),
+                      metricCard(title: 'Low Stock Items', value: '$lowStockCount',
+                        subtitle: 'Need attention', icon: Icons.warning_amber_rounded,
+                        color: const Color(0xFFFF9F75)),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  sectionCard(
-                    title: 'Sales Performance',
-                    icon: Icons.bar_chart_rounded,
-                    child: salesChart(),
-                  ),
-                  const SizedBox(height: 20),
-                  sectionCard(
-                    title: 'Inventory Report',
-                    icon: Icons.table_chart_outlined,
-                    child: inventoryTable(),
-                  ),
+                  const SizedBox(height: 18),
+                  if (width >= 1000)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(flex: 3, child: sectionCard(
+                          title: 'Sales Performance', subtitle: 'Revenue by date',
+                          icon: Icons.bar_chart_rounded, child: salesChart())),
+                        const SizedBox(width: 16),
+                        Expanded(flex: 2, child: sectionCard(
+                          title: 'Inventory Report', subtitle: 'Stock and inventory value',
+                          icon: Icons.table_chart_outlined, child: inventoryTable())),
+                      ],
+                    )
+                  else ...[
+                    sectionCard(title: 'Sales Performance', subtitle: 'Revenue by date',
+                      icon: Icons.bar_chart_rounded, child: salesChart()),
+                    const SizedBox(height: 16),
+                    sectionCard(title: 'Inventory Report', subtitle: 'Stock and inventory value',
+                      icon: Icons.table_chart_outlined, child: inventoryTable()),
+                  ],
                 ],
-              ),
-            );
-          },
-        ),
+              ],
+            ),
+          );
+        }),
       ),
     );
   }
