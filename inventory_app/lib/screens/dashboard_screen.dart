@@ -1,8 +1,8 @@
-
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -11,57 +11,205 @@ import 'inventory_screen.dart';
 import 'customers_screen.dart';
 import 'orders_screen.dart';
 import 'reports_screen.dart';
+import 'users_screen.dart';
 import 'login_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String token;
-
-  const DashboardScreen({
-    super.key,
-    required this.token,
-  });
+  const DashboardScreen({super.key, required this.token});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
-  static const bg = Color(0xFF0B1120);
-  static const sidebarBg = Color(0xFF101B2C);
-  static const surface = Color(0xFF172235);
-  static const mint = Color(0xFF5EEAC4);
-  static const muted = Color(0xFF94A3B8);
-  static const borderColor = Color(0xFF29384D);
+class _DashboardScreenState extends State<DashboardScreen>
+    with SingleTickerProviderStateMixin {
+  static const bg = Color(0xFFF6F7FC);
+  static const white = Colors.white;
+  static const primary = Color(0xFF4F46E5);
+  static const ink = Color(0xFF171B35);
+  static const muted = Color(0xFF777F96);
+  static const line = Color(0xFFE8EAF3);
+  static const green = Color(0xFF059669);
+  static const orange = Color(0xFFD97706);
+
+  late final AnimationController _bannerMotion;
 
   int selectedIndex = 0;
-  bool openLowStockOnly = false;
-  bool isLoading = true;
-  String? errorMessage;
+  bool lowStockOnly = false;
+  bool loading = true;
+  String? error;
+  String role = 'staff';
+  String userName = 'Team member';
   Map<String, dynamic> stats = {};
 
-  final menuItems = <Map<String, dynamic>>[
-    {'icon': Icons.grid_view_rounded, 'title': 'Dashboard'},
-    {'icon': Icons.inventory_2_outlined, 'title': 'Products'},
-    {'icon': Icons.warehouse_outlined, 'title': 'Inventory'},
-    {'icon': Icons.people_outline_rounded, 'title': 'Customers'},
-    {'icon': Icons.shopping_bag_outlined, 'title': 'Orders'},
-    {'icon': Icons.bar_chart_rounded, 'title': 'Reports'},
+  bool get canSeeFinance => role == 'admin' || role == 'manager';
+  bool get isAdmin => role == 'admin';
+
+  static const titles = [
+    'Overview', 'Products', 'Inventory', 'Customers', 'Orders', 'Reports',
+    'User Management',
+  ];
+  static const icons = [
+    Icons.grid_view_rounded,
+    Icons.inventory_2_outlined,
+    Icons.warehouse_outlined,
+    Icons.people_outline_rounded,
+    Icons.shopping_bag_outlined,
+    Icons.bar_chart_rounded,
+    Icons.manage_accounts_outlined,
   ];
 
   @override
   void initState() {
     super.initState();
-    fetchDashboardStats();
+    _bannerMotion = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat(reverse: true);
+    _initialize();
+  }
+
+  @override
+  void dispose() {
+    _bannerMotion.dispose();
+    super.dispose();
+  }
+
+  Widget _workspaceBanner(bool compact) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF3730A3), Color(0xFF4F46E5), Color(0xFF7C3AED)],
+          ),
+        ),
+        child: Stack(children: [
+          Positioned(
+            top: -70, right: -35,
+            child: Container(
+              width: 215, height: 215,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.12), width: 2),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -90, right: 105,
+            child: Container(
+              width: 170, height: 170,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.055),
+              ),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 20 : 28,
+              vertical: compact ? 22 : 27,
+            ),
+            child: Row(children: [
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.auto_awesome_rounded, color: Color(0xFFE9D5FF), size: 15),
+                    const SizedBox(width: 7),
+                    Text('STOCKORA WORKSPACE', style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.83),
+                      fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.6,
+                    )),
+                  ]),
+                  const SizedBox(height: 11),
+                  Text('Manage smarter. Grow faster.',
+                    style: TextStyle(color: Colors.white,
+                      fontSize: compact ? 20 : 27,
+                      height: 1.2, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Welcome back, $userName. Your inventory and orders, all in one place.',
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.82),
+                      fontSize: compact ? 11 : 13, height: 1.5),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.17)),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.check_circle_rounded,
+                        size: 13, color: Color(0xFF86EFAC)),
+                      const SizedBox(width: 7),
+                      Text('${role.toUpperCase()} · Workspace active',
+                        style: const TextStyle(color: Colors.white,
+                          fontSize: 11, fontWeight: FontWeight.w600)),
+                    ]),
+                  ),
+                ],
+              )),
+              if (!compact) ...[
+                const SizedBox(width: 18),
+                SizedBox(width: 175, height: 138,
+                  child: AnimatedBuilder(
+                    animation: _bannerMotion,
+                    builder: (context, child) {
+                      final floatY = _bannerMotion.value * 11;
+                      return Stack(children: [
+                        Positioned(top: 12 + floatY, right: 24,
+                          child: _bannerIcon(Icons.inventory_2_rounded, 64, 0.18)),
+                        Positioned(top: 72 - floatY * 0.6, left: 4,
+                          child: _bannerIcon(Icons.shopping_bag_rounded, 47, 0.16)),
+                        Positioned(top: 78 + floatY * 0.4, right: 0,
+                          child: _bannerIcon(Icons.trending_up_rounded, 43, 0.16)),
+                      ]);
+                    },
+                  ),
+                ),
+              ],
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _bannerIcon(IconData icon, double size, double opacity) {
+    return Container(
+      width: size, height: size,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: opacity),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+      ),
+      child: Icon(icon, color: Colors.white, size: size * 0.48),
+    );
+  }
+
+  Future<void> _initialize() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      role = prefs.getString('user_role') ?? 'staff';
+      userName = prefs.getString('user_name') ?? 'Team member';
+    });
+    await fetchDashboardStats();
   }
 
   Future<void> fetchDashboardStats() async {
     if (!mounted) return;
-
     setState(() {
-      isLoading = true;
-      errorMessage = null;
+      loading = true;
+      error = null;
     });
-
     try {
       final response = await http.get(
         Uri.parse('http://localhost:5000/api/dashboard/stats'),
@@ -70,45 +218,72 @@ class _DashboardScreenState extends State<DashboardScreen> {
           'Cache-Control': 'no-cache',
         },
       ).timeout(const Duration(seconds: 15));
-
-      if (response.statusCode != 200) {
-        throw Exception('API Error ${response.statusCode}');
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        if (!mounted) return;
+        setState(() {
+          loading = false;
+          error = 'Session expired or access denied. Please sign in again.';
+        });
+        return;
       }
-
-      final data = jsonDecode(response.body);
-
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+      final result = jsonDecode(response.body);
+      if (result is! Map<String, dynamic>) throw const FormatException();
       if (!mounted) return;
-
       setState(() {
-        stats = Map<String, dynamic>.from(data);
-        isLoading = false;
+        stats = result;
+        loading = false;
       });
     } catch (_) {
       if (!mounted) return;
-
       setState(() {
-        errorMessage = 'Unable to load dashboard data';
-        isLoading = false;
+        loading = false;
+        error = 'Unable to load dashboard. Check your backend connection.';
       });
     }
   }
 
-  void changePage(int index, {bool closeDrawer = false, bool lowStockOnly = false}) {
-    if (index == 1) {
-      setState(() => openLowStockOnly = lowStockOnly);
-    }
-    if (index == selectedIndex) {
-      if (closeDrawer && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
-      return;
-    }
-    final previousIndex = selectedIndex;
-    setState(() => selectedIndex = index);
-    if (closeDrawer && Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    }
-    if (index == 0 && previousIndex != 0) fetchDashboardStats();
+  void changePage(int index, {bool filterLowStock = false}) {
+    if (index == 5 && !canSeeFinance) return;
+    if (index == 6 && !isAdmin) return;
+    if (index < 0 || index >= titles.length) return;
+    setState(() {
+      selectedIndex = index;
+      if (index == 1) lowStockOnly = filterLowStock;
+    });
+    if (index == 0) fetchDashboardStats();
+  }
+
+  Future<void> logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Sign out of STOCKORA?'),
+        content: const Text('You can sign in again at any time.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+    await prefs.remove('user_role');
+    await prefs.remove('user_name');
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
   }
 
   Future<void> handleBack() async {
@@ -119,910 +294,635 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final exit = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: surface,
-        title: const Text('Exit STOCKORA?',
-            style: TextStyle(color: Colors.white)),
-        content: const Text('Do you want to close the app?',
-            style: TextStyle(color: muted)),
+        title: const Text('Exit STOCKORA?'),
+        content: const Text('Do you want to close the app?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Stay', style: TextStyle(color: mint)),
+            child: const Text('Stay'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            style: FilledButton.styleFrom(backgroundColor: mint,
-                foregroundColor: bg),
             child: const Text('Exit'),
           ),
         ],
       ),
     );
-    if (exit == true && mounted && !kIsWeb) {
-      SystemNavigator.pop();
-    }
+    if (exit == true && mounted && !kIsWeb) SystemNavigator.pop();
   }
 
-  void showMoreMenu() {
+  Widget _navItem(int index, {bool inSheet = false}) {
+    final active = selectedIndex == index;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Material(
+        color: active ? const Color(0xFFEEEDFF) : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: ListTile(
+          dense: true,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          leading: Icon(icons[index], color: active ? primary : muted, size: 21),
+          title: Text(titles[index], style: TextStyle(
+            color: active ? primary : ink,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+          )),
+          onTap: () {
+            if (inSheet) Navigator.pop(context);
+            changePage(index);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _sidebar() => Container(
+    width: 244,
+    decoration: const BoxDecoration(
+      color: white,
+      border: Border(right: BorderSide(color: line)),
+    ),
+    padding: const EdgeInsets.fromLTRB(15, 24, 15, 18),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(color: primary, borderRadius: BorderRadius.circular(12)),
+            child: const Icon(Icons.inventory_2_rounded, color: white, size: 23),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(child: Text('STOCKORA', style: TextStyle(
+            fontWeight: FontWeight.w900, fontSize: 19, color: ink, letterSpacing: 1,
+          ))),
+        ]),
+        const SizedBox(height: 7),
+        const Padding(
+          padding: EdgeInsets.only(left: 3),
+          child: Text('INVENTORY WORKSPACE', style: TextStyle(
+            fontSize: 9, color: muted, letterSpacing: 1.4,
+          )),
+        ),
+        const SizedBox(height: 36),
+        const Padding(
+          padding: EdgeInsets.only(left: 12, bottom: 13),
+          child: Text('WORKSPACE', style: TextStyle(
+            color: muted, fontSize: 10, letterSpacing: 1.5, fontWeight: FontWeight.w700,
+          )),
+        ),
+        for (var i = 0; i < titles.length; i++)
+          if ((i != 5 || canSeeFinance) && (i != 6 || isAdmin)) _navItem(i),
+        const Spacer(),
+        if (isAdmin)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Text('ADMIN ACCESS ENABLED', style: TextStyle(
+              color: primary.withValues(alpha: 0.8),
+              fontWeight: FontWeight.w700, fontSize: 10,
+            )),
+          ),
+        const Divider(color: line),
+        Material(color: Colors.transparent, child: ListTile(
+          leading: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626)),
+          title: const Text('Sign out', style: TextStyle(color: Color(0xFFDC2626))),
+          onTap: logout,
+        )),
+        const Divider(color: line),
+        Material(color: Colors.transparent, child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          leading: const CircleAvatar(
+            backgroundColor: Color(0xFFEEEDFF),
+            child: Icon(Icons.person_outline, color: primary),
+          ),
+          title: Text(userName, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: ink, fontWeight: FontWeight.w700, fontSize: 12)),
+          subtitle: Text(role.toUpperCase(), style: const TextStyle(color: muted, fontSize: 10)),
+        )),
+      ],
+    ),
+  );
+
+  void _showMore() {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: sidebarBg,
       showDragHandle: true,
       isScrollControlled: true,
+      backgroundColor: white,
       builder: (sheetContext) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(12, 0, 12, 14),
-                child: Text('Explore STOCKORA',
-                  style: TextStyle(color: Colors.white,
-                      fontSize: 20, fontWeight: FontWeight.w800)),
-              ),
-              for (final index in [2, 3, 5])
+          padding: const EdgeInsets.fromLTRB(20, 6, 20, 22),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Explore STOCKORA', style: TextStyle(
+                fontSize: 20, fontWeight: FontWeight.w800, color: ink,
+              )),
+            ),
+            const SizedBox(height: 14),
+            for (final i in [2, 3, 5, 6])
+              if ((i != 5 || canSeeFinance) && (i != 6 || isAdmin))
                 ListTile(
-                  leading: Icon(menuItems[index]['icon'] as IconData,
-                      color: mint),
-                  title: Text(menuItems[index]['title'] as String,
-                      style: const TextStyle(color: Colors.white)),
-                  trailing: const Icon(Icons.chevron_right_rounded,
-                      color: muted),
+                  leading: Icon(icons[i], color: primary),
+                  title: Text(titles[i]),
+                  trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    changePage(index);
+                    changePage(i);
                   },
                 ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> logout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: surface,
-        title: const Text('Logout?', style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Are you sure you want to logout from STOCKORA?',
-          style: TextStyle(color: muted),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel', style: TextStyle(color: mint)),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: mint,
-              foregroundColor: bg,
+            ListTile(
+              leading: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626)),
+              title: const Text('Sign out'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                logout();
+              },
             ),
-            child: const Text('Logout'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('auth_token');
-      if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Logout failed. Please try again.')),
-      );
-    }
-  }
-
-  void showProfileMenu() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: sidebarBg,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(children: [
-                CircleAvatar(
-                  radius: 24,
-                  backgroundColor: Color(0xFF254D49),
-                  child: Icon(Icons.person_outline, color: mint, size: 27),
-                ),
-                SizedBox(width: 14),
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('STOCKORA Workspace', style: TextStyle(
-                    color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
-                  SizedBox(height: 4),
-                  Text('Signed in', style: TextStyle(color: mint, fontSize: 12)),
-                ]),
-              ]),
-              const SizedBox(height: 18),
-              const Divider(color: borderColor),
-              ListTile(
-                leading: const Icon(Icons.space_dashboard_outlined, color: mint),
-                title: const Text('Dashboard', style: TextStyle(color: Colors.white)),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  changePage(0);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-                title: const Text('Logout', style: TextStyle(color: Colors.redAccent)),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  logout();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.close_rounded, color: muted),
-                title: const Text('Close', style: TextStyle(color: Colors.white)),
-                onTap: () => Navigator.pop(sheetContext),
-              ),
-            ],
-          ),
+          ]),
         ),
       ),
     );
   }
 
-  Widget mobileNavigation() {
+  Widget _mobileNav() {
     final tab = selectedIndex == 0 ? 0 : selectedIndex == 1 ? 1 : selectedIndex == 4 ? 2 : 3;
-    const tabs = [
-      (Icons.space_dashboard_outlined, Icons.space_dashboard_rounded, 'Home'),
-      (Icons.inventory_2_outlined, Icons.inventory_2_rounded, 'Products'),
-      (Icons.shopping_bag_outlined, Icons.shopping_bag_rounded, 'Orders'),
-      (Icons.grid_view_outlined, Icons.grid_view_rounded, 'More'),
+    const labels = ['Home', 'Products', 'Orders', 'More'];
+    const inactiveIcons = [
+      Icons.space_dashboard_outlined,
+      Icons.inventory_2_outlined,
+      Icons.shopping_bag_outlined,
+      Icons.grid_view_outlined,
+    ];
+    const activeIcons = [
+      Icons.space_dashboard_rounded,
+      Icons.inventory_2_rounded,
+      Icons.shopping_bag_rounded,
+      Icons.grid_view_rounded,
     ];
     return Container(
       decoration: const BoxDecoration(
-        color: sidebarBg,
-        border: Border(top: BorderSide(color: borderColor)),
+        color: white,
+        border: Border(top: BorderSide(color: line)),
       ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 9, 12, 7),
-          child: Row(
-            children: List.generate(tabs.length, (index) {
-              final active = tab == index;
-              final item = tabs[index];
-              return Expanded(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () => index == 3 ? showMoreMenu() : changePage([0, 1, 4][index]),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    decoration: BoxDecoration(
-                      color: active ? mint.withValues(alpha: 0.11) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(active ? item.$2 : item.$1, color: active ? mint : muted, size: 23),
-                        const SizedBox(height: 5),
-                        Text(item.$3, style: TextStyle(color: active ? mint : muted,
-                          fontSize: 10.5, fontWeight: active ? FontWeight.w800 : FontWeight.w500)),
-                      ],
-                    ),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 5),
+          child: Row(children: [
+            for (var i = 0; i < 4; i++)
+              Expanded(child: InkWell(
+                onTap: () => i == 3 ? _showMore() : changePage([0, 1, 4][i]),
+                borderRadius: BorderRadius.circular(12),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: tab == i ? const Color(0xFFEEEDFF) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(tab == i ? activeIcons[i] : inactiveIcons[i],
+                        color: tab == i ? primary : muted, size: 23),
+                    const SizedBox(height: 4),
+                    Text(labels[i], style: TextStyle(
+                      color: tab == i ? primary : muted,
+                      fontWeight: tab == i ? FontWeight.w800 : FontWeight.w500,
+                      fontSize: 10,
+                    )),
+                  ]),
                 ),
-              );
-            }),
-          ),
+              )),
+          ]),
         ),
       ),
     );
   }
 
-  Widget menuTile(int index) {
-    final selected = selectedIndex == index;
+  Widget _panel({required Widget child}) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(19),
+    decoration: BoxDecoration(
+      color: white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: line),
+      boxShadow: const [BoxShadow(
+        color: Color(0x080F172A), blurRadius: 18, offset: Offset(0, 6),
+      )],
+    ),
+    child: child,
+  );
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 5),
-      child: Material(
-        color: selected
-            ? mint.withValues(alpha: 0.12)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: ListTile(
-          dense: true,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          leading: Icon(
-            menuItems[index]['icon'] as IconData,
-            size: 21,
-            color: selected ? mint : muted,
-          ),
-          title: Text(
-            menuItems[index]['title'] as String,
-            style: TextStyle(
-              color: selected ? mint : Colors.white70,
-              fontWeight:
-                  selected ? FontWeight.w700 : FontWeight.w500,
-              fontSize: 14,
-            ),
-          ),
-          onTap: () => changePage(index, closeDrawer: MediaQuery.sizeOf(context).width < 800),
-        ),
-      ),
-    );
-  }
-
-  Widget sidebar() {
-    return Container(
-      width: 235,
-      color: sidebarBg,
-      padding: const EdgeInsets.fromLTRB(15, 22, 15, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 10),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.inventory_2_rounded,
-                  color: mint,
-                  size: 30,
-                ),
-                SizedBox(width: 10),
-                Text(
-                  'STOCKORA',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 21,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Padding(
-            padding: EdgeInsets.only(left: 12),
-            child: Text(
-              'INVENTORY INTELLIGENCE',
-              style: TextStyle(
-                color: muted,
-                fontSize: 9,
-                letterSpacing: 1.4,
-              ),
-            ),
-          ),
-          const SizedBox(height: 38),
-          const Padding(
-            padding: EdgeInsets.only(left: 12, bottom: 14),
-            child: Text(
-              'WORKSPACE',
-              style: TextStyle(
-                color: muted,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.5,
-              ),
-            ),
-          ),
-          ...List.generate(menuItems.length, menuTile),
-          const Spacer(),
-          ListTile(
-            leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-            title: const Text('Logout', style: TextStyle(
-              color: Colors.redAccent,
-              fontWeight: FontWeight.w600,
-            )),
-            onTap: logout,
-          ),
-          const Divider(color: borderColor),
-          const Padding(
-            padding: EdgeInsets.symmetric(
-              vertical: 10,
-              horizontal: 8,
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 17,
-                  backgroundColor: Color(0xFF254D49),
-                  child: Icon(
-                    Icons.person_outline,
-                    color: mint,
-                    size: 20,
-                  ),
-                ),
-                SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Admin Workspace',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        'STOCKORA',
-                        style: TextStyle(
-                          color: muted,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  
-  Widget kpiCard({
+  Widget _metric({
     required String title,
     required String value,
+    required String subtitle,
     required IconData icon,
     required Color accent,
-    required String subtitle,
     required VoidCallback onTap,
-  }) {
-    return InkWell(
+  }) => Material(
+    color: white,
+    borderRadius: BorderRadius.circular(18),
+    child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(18),
       child: Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [surface, Color.lerp(surface, accent, 0.055)!],
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: line),
         ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor),
-        boxShadow: const [BoxShadow(color: Color(0x16000000), blurRadius: 16, offset: Offset(0, 7))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Container(
-              padding: const EdgeInsets.all(9),
-              decoration: BoxDecoration(color: accent.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(12)),
-              child: Icon(icon, color: accent, size: 20),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: accent, size: 21),
             ),
             const Spacer(),
-            Icon(Icons.north_east_rounded, color: accent.withValues(alpha: 0.45), size: 17),
+            Icon(Icons.north_east_rounded, color: accent, size: 18),
           ]),
           const Spacer(),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text(value, style: const TextStyle(color: Colors.white,
-              fontSize: 27, fontWeight: FontWeight.w800, letterSpacing: -0.8)),
+            child: Text(value, style: const TextStyle(
+              color: ink, fontSize: 28, fontWeight: FontWeight.w900,
+            )),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white, fontSize: 12,
-              fontWeight: FontWeight.w700)),
+              style: const TextStyle(color: ink, fontWeight: FontWeight.w700, fontSize: 12)),
           const SizedBox(height: 2),
           Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: muted, fontSize: 10)),
-        ],
+              style: const TextStyle(color: muted, fontSize: 10)),
+        ]),
       ),
+    ),
+  );
+
+  Widget _quickAction(String label, IconData icon, int page) => Expanded(
+    child: OutlinedButton.icon(
+      onPressed: () => changePage(page),
+      icon: Icon(icon, size: 17),
+      label: Text(label, overflow: TextOverflow.ellipsis),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: primary,
+        backgroundColor: white,
+        side: const BorderSide(color: line),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
       ),
-    );
+    ),
+  );
+
+  Widget _lowStockSection() {
+    final items = (stats['lowStockProducts'] as List?) ?? [];
+    return _panel(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Icon(Icons.warning_amber_rounded, color: orange),
+        const SizedBox(width: 9),
+        const Expanded(child: Text('Low-stock alerts', style: TextStyle(
+          color: ink, fontWeight: FontWeight.w800, fontSize: 17,
+        ))),
+        Text('${items.length} items', style: const TextStyle(color: muted, fontSize: 12)),
+      ]),
+      const SizedBox(height: 7),
+      const Text('Products that need attention', style: TextStyle(color: muted, fontSize: 12)),
+      const SizedBox(height: 15),
+      const Divider(color: line),
+      if (items.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 17),
+          child: Row(children: [
+            Icon(Icons.check_circle_outline, color: green),
+            SizedBox(width: 10),
+            Expanded(child: Text('All products have sufficient stock',
+                style: TextStyle(color: ink, fontSize: 13))),
+          ]),
+        )
+      else
+        for (final raw in items)
+          if (raw is Map)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(
+                backgroundColor: Color(0xFFFFF3E6),
+                child: Icon(Icons.inventory_2_outlined, color: orange),
+              ),
+              title: Text('${raw['name'] ?? 'Product'}',
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: ink, fontWeight: FontWeight.w700, fontSize: 13)),
+              subtitle: Text('SKU: ${raw['sku'] ?? '-'}',
+                  style: const TextStyle(color: muted, fontSize: 11)),
+              trailing: Text('${raw['stock'] ?? 0} left',
+                  style: const TextStyle(color: orange, fontWeight: FontWeight.w800)),
+              onTap: () => changePage(1, filterLowStock: true),
+            ),
+      if (items.isNotEmpty)
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => changePage(1, filterLowStock: true),
+            child: const Text('View low-stock products'),
+          ),
+        ),
+    ]));
   }
 
-  Widget quickAction({required String title, required IconData icon,
-      required int page, required Color accent}) {
-    return InkWell(
-      onTap: () => changePage(page),
-      borderRadius: BorderRadius.circular(17),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
-        decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(17),
-          border: Border.all(color: borderColor)),
+  Widget _recentOrdersSection() {
+    final orders = (stats['recentOrders'] as List?) ?? [];
+    return _panel(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Row(children: [
+        Icon(Icons.receipt_long_outlined, color: primary),
+        SizedBox(width: 9),
+        Expanded(child: Text('Recent orders', style: TextStyle(
+          color: ink, fontWeight: FontWeight.w800, fontSize: 17,
+        ))),
+      ]),
+      const SizedBox(height: 7),
+      const Text('Latest customer activity', style: TextStyle(color: muted, fontSize: 12)),
+      const SizedBox(height: 15),
+      const Divider(color: line),
+      if (orders.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 17),
+          child: Text('No recent orders available', style: TextStyle(color: muted)),
+        )
+      else
+        for (final raw in orders.take(5))
+          if (raw is Map)
+            _orderRow(raw),
+      if (orders.isNotEmpty)
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => changePage(4),
+            child: const Text('View all orders'),
+          ),
+        ),
+    ]));
+  }
+
+  Widget _orderRow(Map order) {
+    final id = (order['_id'] ?? '').toString();
+    final shortId = id.length > 6 ? id.substring(id.length - 6) : id;
+    final customer = order['customer'];
+    final customerName = customer is Map
+        ? (customer['name'] ?? 'Customer').toString()
+        : (order['customerName'] ?? 'Customer').toString();
+    final status = (order['status'] ?? 'Pending').toString();
+    final amount = num.tryParse('${order['totalAmount'] ?? order['total'] ?? 0}') ?? 0;
+    final success = status.toLowerCase() == 'completed';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: InkWell(
+        onTap: () => changePage(4),
+        borderRadius: BorderRadius.circular(10),
         child: Row(children: [
-          Container(padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: accent, size: 19)),
+          const CircleAvatar(
+            backgroundColor: Color(0xFFEEEDFF),
+            child: Icon(Icons.shopping_bag_outlined, color: primary, size: 19),
+          ),
           const SizedBox(width: 10),
-          Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white, fontSize: 12,
-              fontWeight: FontWeight.w700))),
-          const Icon(Icons.chevron_right_rounded, color: muted, size: 17),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Order #$shortId', style: const TextStyle(
+              color: ink, fontWeight: FontWeight.w700, fontSize: 13,
+            )),
+            const SizedBox(height: 3),
+            Text(customerName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: muted, fontSize: 11)),
+          ])),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            if (canSeeFinance && stats.containsKey('totalSales'))
+              Text('₹${amount.toStringAsFixed(0)}', style: const TextStyle(
+                color: ink, fontWeight: FontWeight.w800, fontSize: 12,
+              )),
+            Text(status.toUpperCase(), style: TextStyle(
+              color: success ? green : orange,
+              fontWeight: FontWeight.w700, fontSize: 10,
+            )),
+          ]),
         ]),
       ),
     );
   }
 
-  Widget lowStockSection() {
-    final items = (stats['lowStockProducts'] as List?) ?? [];
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.orangeAccent,
-                size: 22,
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'Low Stock Alerts',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Text(
-                '${items.length} items',
-                style: const TextStyle(
-                  color: muted,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Products that need your attention',
-            style: TextStyle(color: muted, fontSize: 12),
-          ),
-          const SizedBox(height: 16),
-          const Divider(color: borderColor),
-          if (items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 18),
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle_outline, color: mint),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'All products have sufficient stock',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            ...items.map((item) {
-              final stock = item['stock'] ?? 0;
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 7),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.orangeAccent
-                            .withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.inventory_2_outlined,
-                        color: Colors.orangeAccent,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${item['name']}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'SKU: ${item['sku']}',
-                            style: const TextStyle(
-                              color: muted,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 11,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.orangeAccent
-                            .withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '$stock left',
-                        style: const TextStyle(
-                          color: Colors.orangeAccent,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-
-  Color orderStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'completed':
-      case 'delivered':
-        return mint;
-      case 'pending':
-        return Colors.orangeAccent;
-      case 'cancelled':
-      case 'canceled':
-        return Colors.redAccent;
-      default:
-        return const Color(0xFF73A9FF);
-    }
-  }
-
-  Widget recentOrdersSection() {
-    final orders = (stats['recentOrders'] as List?) ?? [];
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.receipt_long_outlined,
-                color: mint,
-                size: 22,
-              ),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Recent Orders',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Latest customer orders',
-            style: TextStyle(
-              color: muted,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Divider(color: borderColor),
-          if (orders.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 18),
-              child: Text(
-                'No recent orders available',
-                style: TextStyle(color: muted),
-              ),
-            )
-          else
-            ...orders.take(5).map((order) {
-              final id = order['_id']?.toString() ?? '';
-              final shortId =
-                  id.length > 6 ? id.substring(id.length - 6) : id;
-
-              final customer = order['customer'];
-              String customerName = 'Customer';
-
-              if (customer is Map) {
-                customerName =
-                    customer['name']?.toString() ?? 'Customer';
-              } else if (order['customerName'] != null) {
-                customerName = order['customerName'].toString();
-              }
-
-              final amount = num.tryParse(
-                    (order['totalAmount'] ??
-                            order['total'] ??
-                            0)
-                        .toString(),
-                  ) ??
-                  0;
-
-              final status =
-                  order['status']?.toString() ?? 'Pending';
-              final statusColor = orderStatusColor(status);
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 9),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: mint.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.shopping_bag_outlined,
-                        color: mint,
-                        size: 19,
-                      ),
-                    ),
-                    const SizedBox(width: 11),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Order #$shortId',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            customerName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: muted,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '₹${amount.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          status.toUpperCase(),
-                          style: TextStyle(
-                            color: statusColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-
-  Widget dashboardContent() {
-    if (isLoading) {
-      return const Center(child: CircularProgressIndicator(color: mint));
-    }
-    if (errorMessage != null) {
-      return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.wifi_off_rounded, color: muted, size: 38),
-        const SizedBox(height: 12),
-        Text(errorMessage!, style: const TextStyle(color: Colors.white70)),
-        const SizedBox(height: 15),
-        OutlinedButton(onPressed: fetchDashboardStats, child: const Text('Try again')),
-      ]));
+  Widget _dashboardContent() {
+    if (loading) return const Center(child: CircularProgressIndicator(color: primary));
+    if (error != null) {
+      return Center(child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.wifi_off_rounded, color: muted, size: 38),
+          const SizedBox(height: 12),
+          Text(error!, textAlign: TextAlign.center, style: const TextStyle(color: ink)),
+          const SizedBox(height: 12),
+          OutlinedButton(onPressed: fetchDashboardStats, child: const Text('Try again')),
+          TextButton(onPressed: logout, child: const Text('Sign out')),
+        ]),
+      ));
     }
     return LayoutBuilder(builder: (context, constraints) {
       final width = constraints.maxWidth;
-      final compact = width < 550;
-      final columns = width >= 1050 ? 4 : 2;
+      final compact = width < 600;
       return RefreshIndicator(
-        color: mint,
+        color: primary,
         onRefresh: fetchDashboardStats,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(compact ? 16 : 26, 18, compact ? 16 : 26, 36),
+          padding: EdgeInsets.fromLTRB(compact ? 15 : 26, 0, compact ? 15 : 26, 36),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            if (compact) ...[
-              const Text('Dashboard Overview', style: TextStyle(
-                color: Colors.white, fontSize: 23, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 5),
-              const Text('Your business, at a glance',
-                style: TextStyle(color: muted, fontSize: 12)),
-              const SizedBox(height: 22),
-            ] else ...[
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(compact ? 21 : 27),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF1A4C51), Color(0xFF12323E), Color(0xFF172235)]),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFF32636A)),
-              ),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(color: mint.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(30)),
-                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.circle, size: 7, color: mint),
-                      SizedBox(width: 7),
-                      Text('WORKSPACE OVERVIEW', style: TextStyle(color: mint,
-                        fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1)),
-                    ])),
-                  const Spacer(),
-                  IconButton(onPressed: fetchDashboardStats,
-                    tooltip: 'Refresh', icon: const Icon(Icons.refresh_rounded, color: Colors.white70)),
-                ]),
-                const SizedBox(height: 15),
-                Text('Business at a glance', style: TextStyle(color: Colors.white,
-                  fontSize: compact ? 24 : 30, fontWeight: FontWeight.w800,
-                  letterSpacing: -0.8)),
-                const SizedBox(height: 7),
-                const Text('Everything you need to manage your inventory, all in one place.',
-                  style: TextStyle(color: Color(0xFFB6D0D2), fontSize: 12.5, height: 1.5)),
-                const SizedBox(height: 18),
-                InkWell(onTap: () => changePage(1),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
-                    decoration: BoxDecoration(color: mint, borderRadius: BorderRadius.circular(12)),
-                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                      Text('Manage products', style: TextStyle(color: bg, fontSize: 12,
-                        fontWeight: FontWeight.w800)),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, color: bg, size: 17),
-                    ]))),
-              ]),
-            ),
-            const SizedBox(height: 27),
-            ],
+            _workspaceBanner(compact),
+            const SizedBox(height: 22),
             Row(children: [
-              const Expanded(child: Text('Key metrics', style: TextStyle(color: Colors.white,
-                fontSize: 19, fontWeight: FontWeight.w800))),
-              Text('LIVE OVERVIEW', style: TextStyle(color: muted,
-                fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 1)),
+              Expanded(child: Text('Workspace overview', style: TextStyle(
+                color: ink, fontSize: compact ? 22 : 25,
+                fontWeight: FontWeight.w900, letterSpacing: -0.5,
+              ))),
+              IconButton(
+                tooltip: 'Refresh dashboard',
+                onPressed: fetchDashboardStats,
+                icon: const Icon(Icons.refresh_rounded, color: primary),
+              ),
             ]),
+            const SizedBox(height: 15),
+            if (width >= 900)
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(flex: 3, child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                const Text('Key metrics', style: TextStyle(
+                  color: ink, fontWeight: FontWeight.w800, fontSize: 18,
+                )),
+                const SizedBox(height: 13),
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  mainAxisExtent: compact ? 164 : 170,
+                  children: [
+                    _metric(
+                      title: 'Total products', value: '${stats['totalProducts'] ?? 0}',
+                      subtitle: 'Catalog items', icon: Icons.inventory_2_outlined,
+                      accent: primary, onTap: () => changePage(1),
+                    ),
+                    _metric(
+                      title: 'Total orders', value: '${stats['totalOrders'] ?? 0}',
+                      subtitle: 'Completed orders', icon: Icons.shopping_bag_outlined,
+                      accent: const Color(0xFF0284C7), onTap: () => changePage(4),
+                    ),
+                    if (canSeeFinance && stats.containsKey('totalSales'))
+                      _metric(
+                        title: 'Total sales', value: '₹${stats['totalSales'] ?? 0}',
+                        subtitle: 'Revenue to date', icon: Icons.payments_outlined,
+                        accent: green, onTap: () => changePage(5),
+                      ),
+                    _metric(
+                      title: 'Low-stock alerts', value: '${stats['lowStockCount'] ?? 0}',
+                      subtitle: 'Need attention', icon: Icons.warning_amber_rounded,
+                      accent: orange,
+                      onTap: () => changePage(1, filterLowStock: true),
+                    ),
+                    if (!canSeeFinance)
+                      _metric(
+                        title: 'Customers', value: '${stats['totalCustomers'] ?? 0}',
+                        subtitle: 'Customer records', icon: Icons.people_outline_rounded,
+                        accent: const Color(0xFF7C3AED), onTap: () => changePage(3),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                _lowStockSection(),
+                ])),
+                const SizedBox(width: 20),
+                Expanded(flex: 2, child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                const Text('Quick access', style: TextStyle(
+                  color: ink, fontWeight: FontWeight.w800, fontSize: 18,
+                )),
+                const SizedBox(height: 12),
+                Row(children: [
+                  _quickAction('Products', Icons.inventory_2_outlined, 1),
+                  const SizedBox(width: 10),
+                  _quickAction('Inventory', Icons.warehouse_outlined, 2),
+                ]),
+                const SizedBox(height: 10),
+                Row(children: [
+                  _quickAction('Customers', Icons.people_outline_rounded, 3),
+                  const SizedBox(width: 10),
+                  _quickAction('Orders', Icons.shopping_bag_outlined, 4),
+                ]),
+                const SizedBox(height: 18),
+                _recentOrdersSection(),
+                  ],
+                )),
+              ])
+            else ...[
+            const Text('Key metrics', style: TextStyle(
+              color: ink, fontWeight: FontWeight.w800, fontSize: 18,
+            )),
             const SizedBox(height: 13),
             GridView.count(
-              crossAxisCount: columns, shrinkWrap: true,
+              crossAxisCount: 2,
+              shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12, crossAxisSpacing: 12,
-              mainAxisExtent: compact ? 163 : 175,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              mainAxisExtent: compact ? 164 : 170,
               children: [
-                kpiCard(title: 'Total Products', value: '${stats['totalProducts'] ?? 0}',
-                  icon: Icons.inventory_2_outlined, accent: mint,
-                  subtitle: 'In your catalog', onTap: () => changePage(1)),
-                kpiCard(title: 'Total Orders', value: '${stats['totalOrders'] ?? 0}',
-                  icon: Icons.shopping_bag_outlined, accent: const Color(0xFF80B5FF),
-                  subtitle: 'Orders recorded', onTap: () => changePage(4)),
-                kpiCard(title: 'Total Sales', value: '₹${stats['totalSales'] ?? 0}',
-                  icon: Icons.payments_outlined, accent: const Color(0xFFFFCB75),
-                  subtitle: 'Revenue to date', onTap: () => changePage(5)),
-                kpiCard(title: 'Low Stock Alerts', value: '${stats['lowStockCount'] ?? 0}',
-                  icon: Icons.warning_amber_rounded, accent: const Color(0xFFFF9F77),
-                  subtitle: 'Need attention', onTap: () => changePage(1, lowStockOnly: true)),
+                _metric(
+                  title: 'Total products', value: '${stats['totalProducts'] ?? 0}',
+                  subtitle: 'Catalog items', icon: Icons.inventory_2_outlined,
+                  accent: primary, onTap: () => changePage(1),
+                ),
+                _metric(
+                  title: 'Total orders', value: '${stats['totalOrders'] ?? 0}',
+                  subtitle: 'Completed orders', icon: Icons.shopping_bag_outlined,
+                  accent: const Color(0xFF0284C7), onTap: () => changePage(4),
+                ),
+                if (canSeeFinance && stats.containsKey('totalSales'))
+                  _metric(
+                    title: 'Total sales', value: '₹${stats['totalSales'] ?? 0}',
+                    subtitle: 'Revenue to date', icon: Icons.payments_outlined,
+                    accent: green, onTap: () => changePage(5),
+                  ),
+                _metric(
+                  title: 'Low-stock alerts', value: '${stats['lowStockCount'] ?? 0}',
+                  subtitle: 'Need attention', icon: Icons.warning_amber_rounded,
+                  accent: orange,
+                  onTap: () => changePage(1, filterLowStock: true),
+                ),
+                if (!canSeeFinance)
+                  _metric(
+                    title: 'Customers', value: '${stats['totalCustomers'] ?? 0}',
+                    subtitle: 'Customer records', icon: Icons.people_outline_rounded,
+                    accent: const Color(0xFF7C3AED), onTap: () => changePage(3),
+                  ),
               ],
             ),
-            if (width < 800) ...[
-              const SizedBox(height: 24),
-              const Text('Quick access', style: TextStyle(
-                color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 13),
-              Row(children: [
-                Expanded(child: quickAction(title: 'Products',
-                  icon: Icons.inventory_2_outlined, page: 1, accent: mint)),
-                const SizedBox(width: 12),
-                Expanded(child: quickAction(title: 'Inventory',
-                  icon: Icons.warehouse_outlined, page: 2,
-                  accent: const Color(0xFF80B5FF))),
-              ]),
-              const SizedBox(height: 12),
-              Row(children: [
-                Expanded(child: quickAction(title: 'Customers',
-                  icon: Icons.people_outline_rounded, page: 3,
-                  accent: const Color(0xFFFFCB75))),
-                const SizedBox(width: 12),
-                Expanded(child: quickAction(title: 'Orders',
-                  icon: Icons.shopping_bag_outlined, page: 4,
-                  accent: const Color(0xFFBB9BFF))),
-              ]),
-              const SizedBox(height: 12),
-              Row(children: [
-                Expanded(child: quickAction(title: 'Reports',
-                  icon: Icons.bar_chart_rounded, page: 5,
-                  accent: const Color(0xFFFF9F77))),
-                const Expanded(child: SizedBox.shrink()),
-              ]),
+              const SizedBox(height: 20),
+            const Text('Quick access', style: TextStyle(
+              color: ink, fontWeight: FontWeight.w800, fontSize: 18,
+            )),
+            const SizedBox(height: 12),
+            Row(children: [
+              _quickAction('Products', Icons.inventory_2_outlined, 1),
+              const SizedBox(width: 10),
+              _quickAction('Inventory', Icons.warehouse_outlined, 2),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              _quickAction('Customers', Icons.people_outline_rounded, 3),
+              const SizedBox(width: 10),
+              _quickAction('Orders', Icons.shopping_bag_outlined, 4),
+            ]),
             ],
-            const SizedBox(height: 27),
-            if (width >= 800)
-              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Expanded(flex: 3, child: lowStockSection()),
-                const SizedBox(width: 16),
-                Expanded(flex: 2, child: recentOrdersSection()),
-              ])
-            else
+            const SizedBox(height: 25),
+            if (width < 900)
               Column(children: [
-                lowStockSection(),
+                _lowStockSection(),
                 const SizedBox(height: 16),
-                recentOrdersSection(),
+                _recentOrdersSection(),
               ]),
           ]),
         ),
       );
     });
+  }
+
+  Widget _selectedScreen() {
+    switch (selectedIndex) {
+      case 0:
+        return _dashboardContent();
+      case 1:
+        return ProductsScreen(
+          key: ValueKey(lowStockOnly),
+          token: widget.token,
+          initialLowStockOnly: lowStockOnly,
+        );
+      case 2:
+        return InventoryScreen(token: widget.token);
+      case 3:
+        return CustomersScreen(token: widget.token);
+      case 4:
+        return OrdersScreen(token: widget.token);
+      case 5:
+        return canSeeFinance
+            ? ReportsScreen(token: widget.token)
+            : _dashboardContent();
+      case 6:
+        return isAdmin
+            ? UsersScreen(token: widget.token)
+            : _dashboardContent();
+      default:
+        return _dashboardContent();
+    }
   }
 
   @override
@@ -1036,79 +936,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Scaffold(
         backgroundColor: bg,
         appBar: AppBar(
-          backgroundColor: bg,
-          foregroundColor: Colors.white,
+          backgroundColor: white,
+          foregroundColor: ink,
+          surfaceTintColor: white,
           elevation: 0,
-          toolbarHeight: 64,
-          titleSpacing: wide ? 24 : 8,
-          leading: wide ? null : selectedIndex == 0
-              ? const Padding(
-                  padding: EdgeInsets.only(left: 16),
-                  child: Icon(Icons.inventory_2_rounded, color: mint, size: 27),
-                )
-              : IconButton(
-                  tooltip: 'Back to Dashboard',
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  onPressed: () => changePage(0),
-                ),
-          title: Text(
-            wide ? menuItems[selectedIndex]['title'] as String
-                : selectedIndex == 0 ? 'STOCKORA'
-                : menuItems[selectedIndex]['title'] as String,
-            style: const TextStyle(fontSize: 19,
-                fontWeight: FontWeight.w800, letterSpacing: 0.3),
-          ),
+          toolbarHeight: 62,
+          titleSpacing: wide ? 24 : 12,
+          leading: wide
+              ? null
+              : selectedIndex == 0
+                  ? const Icon(Icons.inventory_2_rounded, color: primary)
+                  : IconButton(
+                      tooltip: 'Back to overview',
+                      onPressed: () => changePage(0),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+          title: Text(wide ? titles[selectedIndex] :
+              (selectedIndex == 0 ? 'STOCKORA' : titles[selectedIndex]),
+              style: const TextStyle(color: ink, fontWeight: FontWeight.w800, fontSize: 18)),
           actions: [
-            IconButton(
-              tooltip: 'Refresh dashboard',
-              onPressed: fetchDashboardStats,
-              icon: const Icon(Icons.refresh_rounded, color: muted),
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              tooltip: 'Logout',
-              onPressed: logout,
-              icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              tooltip: 'Workspace profile',
-              onPressed: showProfileMenu,
+            if (selectedIndex == 0)
+              IconButton(
+                tooltip: 'Refresh',
+                onPressed: fetchDashboardStats,
+                icon: const Icon(Icons.refresh_rounded, color: muted),
+              ),
+            PopupMenuButton<String>(
+              tooltip: 'Account',
               icon: const CircleAvatar(
                 radius: 17,
-                backgroundColor: Color(0xFF254D49),
-                child: Icon(Icons.person_outline, color: mint, size: 20),
+                backgroundColor: Color(0xFFEEEDFF),
+                child: Icon(Icons.person_outline, color: primary, size: 20),
               ),
+              onSelected: (value) {
+                if (value == 'logout') logout();
+                if (value == 'home') changePage(0);
+              },
+              itemBuilder: (_) => [
+                PopupMenuItem<String>(enabled: false, child: Text(
+                  '$userName (${role.toUpperCase()})',
+                  style: const TextStyle(color: ink, fontWeight: FontWeight.w700),
+                )),
+                const PopupMenuItem(value: 'home', child: Text('Overview')),
+                const PopupMenuItem(value: 'logout', child: Text('Sign out')),
+              ],
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
           ],
+          bottom: const PreferredSize(
+            preferredSize: Size.fromHeight(1),
+            child: Divider(height: 1, color: line),
+          ),
         ),
-        bottomNavigationBar: wide ? null : mobileNavigation(),
-        body: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (wide) sidebar(),
-            Expanded(
-              child: selectedIndex == 0
-                  ? dashboardContent()
-                  : selectedIndex == 1
-                      ? ProductsScreen(
-                           key: ValueKey(openLowStockOnly),
-                           token: widget.token,
-                           initialLowStockOnly: openLowStockOnly,
-                         )
-                      : selectedIndex == 2
-                          ? InventoryScreen(token: widget.token)
-                          : selectedIndex == 3
-                              ? CustomersScreen(token: widget.token)
-                              : selectedIndex == 4
-                                  ? OrdersScreen(token: widget.token)
-                                  : selectedIndex == 5
-                                      ? ReportsScreen(token: widget.token)
-                                      : const SizedBox.shrink(),
-            ),
-          ],
-        ),
+        bottomNavigationBar: wide ? null : _mobileNav(),
+        body: Row(children: [
+          if (wide) _sidebar(),
+          Expanded(child: _selectedScreen()),
+        ]),
       ),
     );
   }

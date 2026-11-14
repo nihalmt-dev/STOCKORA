@@ -247,5 +247,44 @@ router.patch("/:id/status", async (req, res) => {
     });
   }
 });
+// DELETE /api/users/:id
+// Admin can permanently delete Manager or Staff accounts
+// DELETE /api/users/:id
+// Only Admin can delete Staff and Manager accounts
+router.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
 
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        message: "Invalid user ID",
+      });
+    }
+
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    if (user.role === "admin") {
+      return res.status(403).json({
+        message: "Admin accounts are protected",
+      });
+    }
+
+    await user.deleteOne();
+
+    return res.json({
+      message: "User deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete user error:", error.message);
+    return res.status(500).json({
+      message: "Unable to delete user",
+    });
+  }
+});
 module.exports = router;

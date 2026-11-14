@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'add_product_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProductsScreen extends StatefulWidget {
   final String token;
@@ -19,9 +20,18 @@ class ProductsScreen extends StatefulWidget {
 }
 
 class _ProductsScreenState extends State<ProductsScreen> {
-  static const Color bg = Color(0xFF0B1120);
-  static const Color card = Color(0xFF172235);
-  static const Color mint = Color(0xFF5EEAC4);
+  static const Color bg = Color(0xFFF6F7FC);
+  static const Color card = Color(0xFFFFFFFF);
+  static const Color mint = Color(0xFF4F46E5);
+
+  String role = 'staff';
+  bool get canEdit => role == 'admin' || role == 'manager';
+  bool get canDelete => role == 'admin';
+
+  Future<void> loadRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) setState(() => role = prefs.getString('user_role') ?? 'staff');
+  }
 
   List<dynamic> products = [];
   bool isLoading = true;
@@ -34,6 +44,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   void initState() {
     super.initState();
     showLowStockOnly = widget.initialLowStockOnly;
+    loadRole();
     fetchProducts();
   }
 
@@ -101,6 +112,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   Future<void> openAddProduct() async {
+    if (!canEdit) return;
     final added = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -118,6 +130,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   Future<void> editProduct(
     Map<String, dynamic> product,
   ) async {
+    if (!canEdit) return;
     final id = product['_id']?.toString();
 
     if (id == null || id.isEmpty) {
@@ -139,10 +152,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     final priceController = TextEditingController(
       text: product['price']?.toString() ?? '',
-    );
-
-    final stockController = TextEditingController(
-      text: product['stock']?.toString() ?? '',
     );
 
     final thresholdController = TextEditingController(
@@ -170,7 +179,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   padding: const EdgeInsets.only(bottom: 14),
                   child: TextFormField(
                     controller: controller,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Color(0xFF171B35)),
                     keyboardType: numeric
                         ? TextInputType.numberWithOptions(
                             decimal: !integer,
@@ -179,7 +188,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     decoration: InputDecoration(
                       labelText: label,
                       labelStyle:
-                          const TextStyle(color: Colors.white60),
+                          const TextStyle(color: const Color(0xFF777F96)),
                       filled: true,
                       fillColor: bg,
                       border: OutlineInputBorder(
@@ -230,7 +239,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       'sku': skuController.text.trim(),
                       'category': categoryController.text.trim(),
                       'price': double.parse(priceController.text),
-                      'stock': int.parse(stockController.text),
                       'lowStockThreshold':
                           int.parse(thresholdController.text),
                     }),
@@ -262,7 +270,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 backgroundColor: card,
                 title: const Text(
                   'Edit Product',
-                  style: TextStyle(color: Colors.white),
+                  style: TextStyle(color: Color(0xFF171B35)),
                 ),
                 content: SizedBox(
                   width: 450,
@@ -279,12 +287,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
                             'Price',
                             priceController,
                             numeric: true,
-                          ),
-                          field(
-                            'Stock',
-                            stockController,
-                            numeric: true,
-                            integer: true,
                           ),
                           field(
                             'Low Stock Threshold',
@@ -308,7 +310,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     onPressed: saving ? null : saveChanges,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: mint,
-                      foregroundColor: bg,
+                      foregroundColor: Colors.white,
                     ),
                     child: Text(
                       saving ? 'Saving...' : 'Save Changes',
@@ -327,7 +329,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
       skuController.dispose();
       categoryController.dispose();
       priceController.dispose();
-      stockController.dispose();
       thresholdController.dispose();
     }
   }
@@ -335,6 +336,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   Future<void> deleteProduct(
     Map<String, dynamic> product,
   ) async {
+    if (!canDelete) return;
     final id = product['_id']?.toString();
 
     if (id == null || id.isEmpty) {
@@ -350,12 +352,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
         backgroundColor: card,
         title: const Text(
           'Delete Product?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Color(0xFF171B35)),
         ),
         content: Text(
           'Are you sure you want to delete "$name"? '
           'This action cannot be undone.',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: const Color(0xFF777F96)),
         ),
         actions: [
           TextButton(
@@ -419,13 +421,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
         ) ?? 5;
     final low = stock <= threshold;
     final busy = busyProductId == product['_id']?.toString();
-    final accent = low ? const Color(0xFFFFC078) : mint;
+    final accent = low ? const Color(0xFFD97706) : mint;
 
     return Container(
       decoration: BoxDecoration(
         color: card,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF2B3B50)),
+        border: Border.all(color: const Color(0xFFE8EAF3)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(17),
@@ -454,7 +456,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              color: Colors.white,
+                              color: Color(0xFF171B35),
                               fontSize: 16,
                               height: 1.3,
                               fontWeight: FontWeight.w700)),
@@ -463,7 +465,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              color: Color(0xFF98A9BD), fontSize: 12)),
+                              color: Color(0xFF777F96), fontSize: 12)),
                     ],
                   ),
                 ),
@@ -492,7 +494,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     children: [
                       const Text('UNIT PRICE',
                           style: TextStyle(
-                              color: Color(0xFF98A9BD),
+                              color: Color(0xFF777F96),
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.1)),
@@ -501,7 +503,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              color: Colors.white,
+                              color: Color(0xFF171B35),
                               fontSize: 21,
                               fontWeight: FontWeight.w800)),
                     ],
@@ -512,7 +514,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   children: [
                     const Text('AVAILABLE',
                         style: TextStyle(
-                            color: Color(0xFF98A9BD),
+                            color: Color(0xFF777F96),
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.1)),
@@ -534,7 +536,7 @@ Container(
     vertical: 8,
   ),
   decoration: BoxDecoration(
-    color: const Color(0xFF101B2C),
+    color: const Color(0xFFF6F7FC),
     borderRadius: BorderRadius.circular(9),
   ),
   child: Row(
@@ -542,7 +544,7 @@ Container(
       const Icon(
         Icons.category_outlined,
         size: 15,
-        color: Color(0xFF98A9BD),
+        color: Color(0xFF777F96),
       ),
       const SizedBox(width: 7),
       Expanded(
@@ -551,7 +553,7 @@ Container(
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-            color: Color(0xFFBECAD8),
+            color: Color(0xFF555F77),
             fontSize: 12,
           ),
         ),
@@ -562,10 +564,10 @@ Container(
 const SizedBox(height: 14),
 const Divider(
   height: 1,
-  color: Color(0xFF2B3B50),
+  color: Color(0xFFE8EAF3),
 ),
-const SizedBox(height: 12),
-Row(
+if (canEdit) const SizedBox(height: 12),
+if (canEdit) Row(
   children: [
     Expanded(
       child: OutlinedButton.icon(
@@ -574,7 +576,7 @@ Row(
         label: const Text('Edit product'),
         style: OutlinedButton.styleFrom(
           foregroundColor: mint,
-          side: const BorderSide(color: Color(0xFF355C58)),
+          side: const BorderSide(color: Color(0xFFC7C4FF)),
           padding: const EdgeInsets.symmetric(vertical: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(11),
@@ -583,14 +585,14 @@ Row(
       ),
     ),
 
-                const SizedBox(width: 10),
-                OutlinedButton.icon(
+                if (canDelete) const SizedBox(width: 10),
+                if (canDelete) OutlinedButton.icon(
                   onPressed: busy ? null : () => deleteProduct(product),
                   icon: const Icon(Icons.delete_outline, size: 18),
                   label: const Text('Delete'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFFF929B),
-                    side: const BorderSide(color: Color(0xFF62404D)),
+                    foregroundColor: const Color(0xFFDC2626),
+                    side: const BorderSide(color: Color(0xFFFECACA)),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 13, vertical: 12),
                     shape: RoundedRectangleBorder(
@@ -639,7 +641,7 @@ Row(
                     const SizedBox(height: 110),
                     const Center(
                         child: Text('Unable to load products',
-                            style: TextStyle(color: Colors.white))),
+                            style: TextStyle(color: Color(0xFF171B35)))),
                     const SizedBox(height: 12),
                     Center(
                         child: TextButton(
@@ -662,15 +664,15 @@ Row(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Your products',
+                                    Text('Product catalog',
                                         style: TextStyle(
-                                            color: Colors.white,
+                                            color: Color(0xFF171B35),
                                             fontSize: 25,
                                             fontWeight: FontWeight.w800)),
                                     SizedBox(height: 6),
-                                    Text('Organize and track your catalog',
+                                    Text('Manage your inventory catalog and stock visibility',
                                         style: TextStyle(
-                                            color: Color(0xFF98A9BD),
+                                            color: Color(0xFF777F96),
                                             fontSize: 12)),
                                   ],
                                 ),
@@ -706,13 +708,13 @@ Row(
                                     Icons.warning_amber_rounded,
                                     '$lowCount',
                                     'Low stock',
-                                    const Color(0xFFFFC078),
+                                    const Color(0xFFD97706),
                                     selected: showLowStockOnly),
                               ),
                             ),
                           ]),
                           const SizedBox(height: 18),
-                          SizedBox(
+                          if (canEdit) SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               onPressed: openAddProduct,
@@ -723,7 +725,7 @@ Row(
                                       fontSize: 14)),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: mint,
-                                foregroundColor: bg,
+                                foregroundColor: Colors.white,
                                 minimumSize: const Size(0, 50),
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(13)),
@@ -734,13 +736,13 @@ Row(
                           TextField(
                             onChanged: (value) =>
                                 setState(() => searchQuery = value),
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Color(0xFF171B35)),
                             decoration: InputDecoration(
                               hintText: 'Search by name, SKU or category',
                               hintStyle: const TextStyle(
-                                  color: Color(0xFF98A9BD), fontSize: 13),
+                                  color: Color(0xFF777F96), fontSize: 13),
                               prefixIcon: const Icon(Icons.search_rounded,
-                                  color: Color(0xFF98A9BD)),
+                                  color: Color(0xFF777F96)),
                               filled: true,
                               fillColor: card,
                               contentPadding: const EdgeInsets.symmetric(
@@ -748,7 +750,7 @@ Row(
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(13),
                                 borderSide: const BorderSide(
-                                    color: Color(0xFF2B3B50)),
+                                    color: Color(0xFFE8EAF3)),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(13),
@@ -762,7 +764,7 @@ Row(
                               const Expanded(
                                 child: Text('Showing low-stock products',
                                     style: TextStyle(
-                                        color: Color(0xFFFFC078),
+                                        color: Color(0xFFD97706),
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700)),
                               ),
@@ -778,13 +780,13 @@ Row(
                             const Expanded(
                               child: Text('Product catalog',
                                   style: TextStyle(
-                                      color: Colors.white,
+                                      color: Color(0xFF171B35),
                                       fontSize: 17,
                                       fontWeight: FontWeight.w700)),
                             ),
                             Text('${filtered.length} items',
                                 style: const TextStyle(
-                                    color: Color(0xFF98A9BD), fontSize: 12)),
+                                    color: Color(0xFF777F96), fontSize: 12)),
                           ]),
                           const SizedBox(height: 14),
                           if (filtered.isEmpty)
@@ -797,7 +799,7 @@ Row(
                               ),
                               child: Column(children: [
                                 const Icon(Icons.search_off_rounded,
-                                    color: Color(0xFF98A9BD), size: 36),
+                                    color: Color(0xFF777F96), size: 36),
                                 const SizedBox(height: 12),
                                 Text(products.isEmpty
                                     ? 'No products added yet'
@@ -805,7 +807,7 @@ Row(
                                         ? 'No low-stock products'
                                         : 'No matching products',
                                     style: const TextStyle(
-                                        color: Colors.white70)),
+                                        color: const Color(0xFF777F96))),
                               ]),
                             )
                           else
@@ -844,7 +846,7 @@ Row(
         color: card,
         borderRadius: BorderRadius.circular(15),
         border: Border.all(
-          color: selected ? accent : const Color(0xFF2B3B50),
+          color: selected ? accent : const Color(0xFFE8EAF3),
           width: selected ? 1.5 : 1,
         ),
       ),
@@ -864,7 +866,7 @@ Row(
             children: [
               Text(value,
                   style: const TextStyle(
-                      color: Colors.white,
+                      color: Color(0xFF171B35),
                       fontSize: 19,
                       fontWeight: FontWeight.w800)),
               const SizedBox(height: 2),
@@ -872,7 +874,7 @@ Row(
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      color: Color(0xFF98A9BD), fontSize: 11)),
+                      color: Color(0xFF777F96), fontSize: 11)),
             ],
           ),
         ),
