@@ -166,4 +166,137 @@ router.get(
   }
 );
 
+const RestockRequest = require("../models/RestockRequest");
+
+// STAFF: Send a restock request
+router.post(
+  "/restock-requests",
+  authorize("staff"),
+  async (req, res) => {
+    try {
+      const { productId, note } = req.body;
+
+      if (!mongoose.isValidObjectId(productId)) {
+        return res.status(400).json({
+          message: "Invalid product ID",
+        });
+      }
+
+      if (note !== undefined &&
+          (typeof note !== "string" || note.length > 300)) {
+        return res.status(400).json({
+          message: "Note must be 300 characters or fewer",
+        });
+      }
+
+      const product = await Product.findById(productId);
+
+      if (!product) {
+        return res.status(404).json({
+          message: "Product not found",
+        });
+      }
+
+      if (product.stock > product.lowStockThreshold) {
+        return res.status(400).json({
+          message: "This product is not low on stock",
+        });
+      }
+
+      const request = await RestockRequest.create({
+        product: productId,
+        requestedBy: req.user.id,
+        note: note?.trim() || "",
+      });
+
+      return res.status(201).json({
+        message: "Restock request sent to management",
+        request,
+      });
+    } catch (error) {
+      if (error.code === 11000) {
+        return res.status(409).json({
+          message: "A pending request already exists for this product",
+        });
+      }
+
+      console.error("Restock request error:", error.message);
+
+      return res.status(500).json({
+        message: "Failed to send restock request",
+      });
+    }
+  }
+);
+
+// MANAGER / ADMIN: View restock requests
+router.get(
+  "/restock-requests",
+  authorize("admin", "manager"),
+  async (req, res) => {
+    try {
+      const requests = await RestockRequest.find()
+        .populate("product", "name sku stock lowStockThreshold")
+        .populate("requestedBy", "name email")
+        .populate("resolvedBy", "name")
+        .sort({ createdAt: -1 });
+
+      return res.json(requests);
+    } catch (error) {
+      console.error("Fetch restock requests error:", error.message);
+
+      return res.status(500).json({
+        message: "Failed to fetch restock requests",
+      });
+    }
+  }
+);
+
+// MANAGER / ADMIN: Resolve a restock request
+router.patch(
+  "/restock-requests/:id/resolve",
+  authorize("admin", "manager"),
+  async (req, res) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(400).json({
+          message: "Invalid request ID",
+        });
+      }
+
+      const request = await RestockRequest.findOneAndUpdate(
+        {
+          _id: req.params.id,
+          status: "pending",
+        },
+        {
+          $set: {
+            status: "resolved",
+            resolvedBy: req.user.id,
+            resolvedAt: new Date(),
+          },
+        },
+        { new: true }
+      );
+
+      if (!request) {
+        return res.status(404).json({
+          message: "Pending request not found",
+        });
+      }
+
+      return res.json({
+        message: "Restock request resolved",
+        request,
+      });
+    } catch (error) {
+      console.error("Resolve restock request error:", error.message);
+
+      return res.status(500).json({
+        message: "Failed to resolve restock request",
+      });
+    }
+  }
+);
+
 module.exports = router;

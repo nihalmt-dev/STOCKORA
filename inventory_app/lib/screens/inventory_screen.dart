@@ -28,6 +28,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
   List<dynamic> lowStock = [];
   bool loading = true;
   bool submitting = false;
+  final Set<String> requestingProducts = {};
+  final Set<String> pendingRestockProducts = {};
   String? errorMessage;
   String? selectedProductId;
   String movementType = 'IN';
@@ -164,6 +166,39 @@ class _InventoryScreenState extends State<InventoryScreen> {
       showMessage('Connection error: $error');
     } finally {
       if (mounted) setState(() => submitting = false);
+    }
+  }
+
+  Future<void> requestRestock(String productId) async {
+    if (role != 'staff' || requestingProducts.contains(productId) ||
+        pendingRestockProducts.contains(productId)) return;
+    setState(() => requestingProducts.add(productId));
+    try {
+      final response = await http.post(
+        Uri.parse('http://localhost:5000/api/inventory/restock-requests'),
+        headers: headers,
+        body: jsonEncode({'productId': productId}),
+      ).timeout(const Duration(seconds: 20));
+      if (!mounted) return;
+      if (response.statusCode == 201 || response.statusCode == 409) {
+        setState(() => pendingRestockProducts.add(productId));
+        showMessage(response.statusCode == 201
+            ? 'Restock request sent to manager'
+            : 'A restock request is already pending', success: true);
+      } else {
+        String message = 'Request failed (${response.statusCode})';
+        try {
+          final data = jsonDecode(response.body);
+          if (data is Map && data['message'] != null) {
+            message = data['message'].toString();
+          }
+        } catch (_) {}
+        showMessage(message);
+      }
+    } catch (_) {
+      showMessage('Unable to send request. Check your connection.');
+    } finally {
+      if (mounted) setState(() => requestingProducts.remove(productId));
     }
   }
 
@@ -327,35 +362,81 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   Widget _lowStockSection() => _panel(
     title: 'Low-stock alerts',
-    subtitle: 'Products that need attention',
+    subtitle: role == 'staff'
+        ? 'Request a restock from your manager'
+        : 'Products that need attention',
     icon: Icons.warning_amber_rounded,
     accent: orange,
     child: lowStock.isEmpty
-      ? const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Row(children: [
-          Icon(Icons.check_circle_outline_rounded, color: green),
-          SizedBox(width: 10),
-          Expanded(child: Text('All products have sufficient stock',
-            style: TextStyle(color: muted, fontSize: 12))),
-        ]))
-      : Column(children: lowStock.map((p) => Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: border)),
-          child: Row(children: [
-            const Icon(Icons.inventory_2_outlined, color: orange, size: 21),
-            const SizedBox(width: 10),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${p['name']}', maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: ink, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text('SKU: ${p['sku']}', style: const TextStyle(color: muted, fontSize: 11)),
-            ])),
-            const SizedBox(width: 8),
-            Text('${p['stock']} left', style: const TextStyle(color: orange,
-              fontWeight: FontWeight.w800, fontSize: 12)),
-          ]),
-        )).toList()),
+        ? const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Row(children: [
+              Icon(Icons.check_circle_outline_rounded, color: green),
+              SizedBox(width: 10),
+              Expanded(child: Text('All products have sufficient stock',
+                  style: TextStyle(color: muted, fontSize: 12))),
+            ]),
+          )
+        : Column(children: lowStock.map((p) {
+            final productId = p['_id']?.toString() ?? '';
+            final pending = pendingRestockProducts.contains(productId);
+            final sending = requestingProducts.contains(productId);
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: border),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  const Icon(Icons.inventory_2_outlined, color: orange, size: 21),
+                  const SizedBox(width: 10),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${p['name']}', maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: ink, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 4),
+                      Text('SKU: ${p['sku']}',
+                        style: const TextStyle(color: muted, fontSize: 11)),
+                    ],
+                  )),
+                  const SizedBox(width: 8),
+                  Text('${p['stock']} left',
+                    style: const TextStyle(color: orange,
+                      fontWeight: FontWeight.w800, fontSize: 12)),
+                ]),
+                if (role == 'staff' && productId.isNotEmpty) ...[
+                  const SizedBox(height: 11),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: (pending || sending) ? null
+                          : () => requestRestock(productId),
+                      icon: sending
+                          ? const SizedBox(width: 15, height: 15,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : Icon(pending ? Icons.check_circle_outline_rounded
+                              : Icons.notifications_active_outlined, size: 18),
+                      label: Text(sending ? 'Sending...'
+                          : pending ? 'Request pending' : 'Request Restock'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: primary,
+                        disabledForegroundColor: muted,
+                        side: BorderSide(color: pending ? border : primary),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(11)),
+                      ),
+                    ),
+                  ),
+                ],
+              ]),
+            );
+          }).toList()),
   );
 
   Widget _movementHistory() => _panel(

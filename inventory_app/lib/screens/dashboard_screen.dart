@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -42,6 +43,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   String role = 'staff';
   String userName = 'Team member';
   Map<String, dynamic> stats = {};
+  List<dynamic> restockRequests = [];
+  bool restockLoading = false;
+  Timer? _restockTimer;
+  bool _fetchingRestocks = false;
 
   bool get canSeeFinance => role == 'admin' || role == 'manager';
   bool get isAdmin => role == 'admin';
@@ -68,10 +73,14 @@ class _DashboardScreenState extends State<DashboardScreen>
       duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
     _initialize();
+    _restockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (canSeeFinance) fetchRestockRequests();
+    });
   }
 
   @override
   void dispose() {
+    _restockTimer?.cancel();
     _bannerMotion.dispose();
     super.dispose();
   }
@@ -202,6 +211,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       userName = prefs.getString('user_name') ?? 'Team member';
     });
     await fetchDashboardStats();
+    if (canSeeFinance) await fetchRestockRequests();
   }
 
   Future<void> fetchDashboardStats() async {
@@ -244,6 +254,256 @@ class _DashboardScreenState extends State<DashboardScreen>
       });
     }
   }
+
+  int get pendingRestockCount => restockRequests.where((r) =>
+      r is Map && r['status']?.toString().toLowerCase() == 'pending').length;
+
+  Future<void> fetchRestockRequests() async {
+    if (!canSeeFinance || _fetchingRestocks) return;
+    _fetchingRestocks = true;
+    try {
+      final response = await http.get(
+        Uri.parse('http://localhost:5000/api/inventory/restock-requests'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (mounted) setState(() {
+          restockRequests = data is List ? data : [];
+        });
+      }
+    } catch (_) {
+      // Keep the last known notifications if the network is unavailable.
+    } finally {
+      _fetchingRestocks = false;
+    }
+  }
+
+  Future<void> _resolveRestock(String id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: white,
+        title: const Text('Resolve restock request?',
+            style: TextStyle(color: ink, fontWeight: FontWeight.w800)),
+        content: const Text(
+          'Mark this request as resolved only after checking the stock. '
+          'This action does not add stock automatically.',
+          style: TextStyle(color: ink),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Mark resolved')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      final response = await http.patch(
+        Uri.parse('http://localhost:5000/api/inventory/restock-requests/$id/resolve'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      ).timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Restock request marked as resolved'),
+          backgroundColor: green,
+        ));
+        await fetchRestockRequests();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Unable to resolve request (${response.statusCode})'),
+        ));
+      }
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Connection error while resolving request'),
+      ));
+    }
+  }
+
+  Future<void> _showRestockNotifications() async {
+    if (!canSeeFinance) return;
+    await fetchRestockRequests();
+    if (!mounted) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, refreshSheet) {
+          // Refresh the sheet after a request is resolved.
+          final pending = restockRequests.where((r) =>
+              r is Map && r['status']?.toString() == 'pending').toList();
+          return SafeArea(
+            top: false,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.78,
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.notifications_active_outlined,
+                          color: primary, size: 24),
+                      const SizedBox(width: 10),
+                      const Expanded(child: Text('Restock requests',
+                          style: TextStyle(color: ink, fontSize: 20,
+                              fontWeight: FontWeight.w800))),
+                      IconButton(
+                        tooltip: 'Refresh requests',
+                        onPressed: () async {
+                          await fetchRestockRequests();
+                          if (sheetContext.mounted) refreshSheet(() {});
+                        },
+                        icon: const Icon(Icons.refresh_rounded, color: primary),
+                      ),
+                    ]),
+                    const SizedBox(height: 5),
+                    Text('${pending.length} pending requests',
+                        style: const TextStyle(color: muted, fontSize: 13)),
+                    const SizedBox(height: 18),
+                    if (pending.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle_outline_rounded,
+                                color: green, size: 38),
+                            SizedBox(height: 10),
+                            Text('No pending restock requests',
+                                style: TextStyle(color: ink,
+                                    fontWeight: FontWeight.w700)),
+                          ],
+                        )),
+                      ),
+                    for (final raw in pending)
+                      if (raw is Map)
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(15),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8F9FD),
+                            borderRadius: BorderRadius.circular(15),
+                            border: Border.all(color: line),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                const Icon(Icons.inventory_2_outlined,
+                                    color: orange, size: 20),
+                                const SizedBox(width: 9),
+                                Expanded(child: Text(
+                                  raw['product'] is Map
+                                      ? '${raw['product']['name'] ?? 'Product'}'
+                                      : 'Product unavailable',
+                                  style: const TextStyle(color: ink,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15),
+                                )),
+                                const Text('PENDING', style: TextStyle(
+                                    color: orange, fontSize: 10,
+                                    fontWeight: FontWeight.w800)),
+                              ]),
+                              const SizedBox(height: 8),
+                              Text(
+                                raw['product'] is Map
+                                    ? 'Stock: ${raw['product']['stock'] ?? '-'}  ·  Threshold: ${raw['product']['lowStockThreshold'] ?? '-'}'
+                                    : 'Product details unavailable',
+                                style: const TextStyle(color: muted,
+                                    fontSize: 12),
+                              ),
+                              const SizedBox(height: 4),
+                              Text('Requested by: ${raw['requestedBy'] is Map ? raw['requestedBy']['name'] ?? 'Staff' : 'Staff'}',
+                                  style: const TextStyle(color: ink,
+                                      fontSize: 12)),
+                              if ('${raw['note'] ?? ''}'.trim().isNotEmpty) ...[
+                                const SizedBox(height: 5),
+                                Text('Note: ${raw['note']}',
+                                    style: const TextStyle(color: muted,
+                                        fontSize: 12)),
+                              ],
+                              const SizedBox(height: 12),
+                              Row(children: [
+                                Expanded(child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    Navigator.pop(sheetContext);
+                                    changePage(2);
+                                  },
+                                  icon: const Icon(Icons.warehouse_outlined,
+                                      size: 17),
+                                  label: const Text('Manage stock'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: primary,
+                                  ),
+                                )),
+                                const SizedBox(width: 8),
+                                Expanded(child: FilledButton(
+                                  onPressed: () async {
+                                    await _resolveRestock('${raw['_id']}');
+                                    if (sheetContext.mounted) {
+                                      refreshSheet(() {});
+                                    }
+                                  },
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: primary,
+                                    foregroundColor: white,
+                                  ),
+                                  child: const Text('Resolve'),
+                                )),
+                              ]),
+                            ],
+                          ),
+                        ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _notificationBell() => Stack(
+    clipBehavior: Clip.none,
+    children: [
+      IconButton(
+        tooltip: 'Restock notifications',
+        onPressed: _showRestockNotifications,
+        icon: const Icon(Icons.notifications_none_rounded, color: ink),
+      ),
+      if (pendingRestockCount > 0)
+        Positioned(
+          right: 2,
+          top: 0,
+          child: IgnorePointer(child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDC2626),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: white, width: 1.5),
+            ),
+            child: Text(pendingRestockCount > 99 ? '99+' : '$pendingRestockCount',
+                style: const TextStyle(color: white, fontSize: 9,
+                    fontWeight: FontWeight.w800)),
+          )),
+        ),
+    ],
+  );
 
   void changePage(int index, {bool filterLowStock = false}) {
     if (index == 5 && !canSeeFinance) return;
@@ -408,37 +668,89 @@ class _DashboardScreenState extends State<DashboardScreen>
       showDragHandle: true,
       isScrollControlled: true,
       backgroundColor: white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
       builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 6, 20, 22),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Explore STOCKORA', style: TextStyle(
-                fontSize: 20, fontWeight: FontWeight.w800, color: ink,
-              )),
-            ),
-            const SizedBox(height: 14),
-            for (final i in [2, 3, 5, 6])
-              if ((i != 5 || canSeeFinance) && (i != 6 || isAdmin))
-                ListTile(
-                  leading: Icon(icons[i], color: primary),
-                  title: Text(titles[i]),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    changePage(i);
-                  },
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.78,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Explore STOCKORA', style: TextStyle(
+                  color: ink, fontSize: 21, fontWeight: FontWeight.w800,
+                )),
+                const SizedBox(height: 5),
+                const Text('Navigate your workspace', style: TextStyle(
+                  color: muted, fontSize: 13, fontWeight: FontWeight.w500,
+                )),
+                const SizedBox(height: 18),
+                for (final i in [2, 3, 5, 6])
+                  if ((i != 5 || canSeeFinance) && (i != 6 || isAdmin))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 9),
+                      child: Material(
+                        color: selectedIndex == i
+                            ? const Color(0xFFEEEDFF) : const Color(0xFFF8F9FD),
+                        borderRadius: BorderRadius.circular(15),
+                        child: ListTile(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 5,
+                          ),
+                          leading: Container(
+                            padding: const EdgeInsets.all(9),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE9E8FF),
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Icon(icons[i], color: primary, size: 21),
+                          ),
+                          title: Text(titles[i], style: const TextStyle(
+                            color: ink, fontSize: 15, fontWeight: FontWeight.w700,
+                          )),
+                          trailing: const Icon(Icons.chevron_right_rounded,
+                            color: muted, size: 21),
+                          onTap: () {
+                            Navigator.pop(sheetContext);
+                            changePage(i);
+                          },
+                        ),
+                      ),
+                    ),
+                const SizedBox(height: 8),
+                const Divider(color: line),
+                const SizedBox(height: 8),
+                Material(
+                  color: const Color(0xFFFFF1F2),
+                  borderRadius: BorderRadius.circular(15),
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    leading: const Icon(Icons.logout_rounded,
+                      color: Color(0xFFDC2626)),
+                    title: const Text('Sign out', style: TextStyle(
+                      color: Color(0xFFB91C1C),
+                      fontSize: 15, fontWeight: FontWeight.w700,
+                    )),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      logout();
+                    },
+                  ),
                 ),
-            ListTile(
-              leading: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626)),
-              title: const Text('Sign out'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                logout();
-              },
+              ],
             ),
-          ]),
+          ),
         ),
       ),
     );
@@ -961,8 +1273,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                 onPressed: fetchDashboardStats,
                 icon: const Icon(Icons.refresh_rounded, color: muted),
               ),
+            if (canSeeFinance) _notificationBell(),
             PopupMenuButton<String>(
               tooltip: 'Account',
+              color: white,
+              surfaceTintColor: white,
+              elevation: 10,
+              constraints: const BoxConstraints(minWidth: 260, maxWidth: 310),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: const BorderSide(color: line),
+              ),
               icon: const CircleAvatar(
                 radius: 17,
                 backgroundColor: Color(0xFFEEEDFF),
@@ -973,12 +1294,57 @@ class _DashboardScreenState extends State<DashboardScreen>
                 if (value == 'home') changePage(0);
               },
               itemBuilder: (_) => [
-                PopupMenuItem<String>(enabled: false, child: Text(
-                  '$userName (${role.toUpperCase()})',
-                  style: const TextStyle(color: ink, fontWeight: FontWeight.w700),
-                )),
-                const PopupMenuItem(value: 'home', child: Text('Overview')),
-                const PopupMenuItem(value: 'logout', child: Text('Sign out')),
+                PopupMenuItem<String>(
+                  enabled: false,
+                  height: 76,
+                  child: Row(children: [
+                    const CircleAvatar(
+                      radius: 22,
+                      backgroundColor: Color(0xFFEEEDFF),
+                      child: Icon(Icons.person_rounded, color: primary),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(userName, maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: ink,
+                            fontWeight: FontWeight.w800, fontSize: 15)),
+                        const SizedBox(height: 4),
+                        Text('${role.toUpperCase()} · STOCKORA',
+                          style: const TextStyle(color: muted,
+                            fontSize: 11, fontWeight: FontWeight.w600)),
+                      ],
+                    )),
+                  ]),
+                ),
+                const PopupMenuDivider(height: 8),
+                const PopupMenuItem<String>(
+                  value: 'home',
+                  height: 49,
+                  child: Row(children: [
+                    Icon(Icons.space_dashboard_outlined,
+                      color: primary, size: 20),
+                    SizedBox(width: 12),
+                    Text('Workspace overview', style: TextStyle(
+                      color: ink, fontWeight: FontWeight.w600, fontSize: 14)),
+                  ]),
+                ),
+                const PopupMenuDivider(height: 8),
+                const PopupMenuItem<String>(
+                  value: 'logout',
+                  height: 52,
+                  child: Row(children: [
+                    Icon(Icons.logout_rounded,
+                      color: Color(0xFFDC2626), size: 20),
+                    SizedBox(width: 12),
+                    Text('Sign out', style: TextStyle(
+                      color: Color(0xFFDC2626),
+                      fontWeight: FontWeight.w700, fontSize: 14)),
+                  ]),
+                ),
               ],
             ),
             const SizedBox(width: 12),
