@@ -20,6 +20,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Health Check / Root API
 app.get("/", (req, res) => {
   res.json({
     success: true,
@@ -39,6 +40,7 @@ app.use("/api/reports", reportRoutes);
 // Admin-only User Management API
 app.use("/api/users", userRoutes);
 
+// Render-compatible server configuration
 const PORT = process.env.PORT || 5000;
 
 mongoose
@@ -46,7 +48,7 @@ mongoose
   .then(() => {
     console.log("MongoDB Connected Successfully!");
 
-    app.listen(PORT, () => {
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(`STOCKORA Server running on port ${PORT}`);
     });
   })
