@@ -313,6 +313,7 @@ The Android release is distributed through GitHub Releases.
 ---
 
 ## REST API Overview
+For complete API endpoints, authentication, role permissions, and request examples, see [API Documentation](API_DOCUMENTATION.md).
 
 The backend provides RESTful endpoints for the main application modules.
 
