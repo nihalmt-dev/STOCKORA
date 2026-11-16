@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:inventory_app/config/api_config.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -71,8 +72,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
         return;
       }
       final responses = await Future.wait([
-        http.get(Uri.parse('http://localhost:5000/api/reports/sales'), headers: headers),
-        http.get(Uri.parse('http://localhost:5000/api/reports/inventory'), headers: headers),
+        http.get(Uri.parse('${ApiConfig.baseUrl}/api/reports/sales'), headers: headers),
+        http.get(Uri.parse('${ApiConfig.baseUrl}/api/reports/inventory'), headers: headers),
       ]).timeout(const Duration(seconds: 20));
       if (responses.any((r) => r.statusCode == 401 || r.statusCode == 403)) {
         throw Exception('Access denied. Please sign in with an Admin or Manager account.');
@@ -172,7 +173,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               final label = period == 'Daily' && date.length >= 10 ? date.substring(5) : (date.length >= 7 ? date.substring(2) : date);
               return Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
                 Expanded(child: LayoutBuilder(builder: (context, barSize) => Align(alignment: Alignment.bottomCenter, child: Tooltip(
-                  message: '$date\n${money(value)} · ${integer(e['totalOrders'])} orders',
+                  message: '$date\n${money(value)} Â· ${integer(e['totalOrders'])} orders',
                   child: AnimatedContainer(duration: const Duration(milliseconds: 450), curve: Curves.easeOutCubic,
                     height: math.max(4, barSize.maxHeight * value / maxValue), width: double.infinity,
                     constraints: const BoxConstraints(maxWidth: 46),
@@ -252,12 +253,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [Expanded(child: Text('${p['name'] ?? 'Product'}', style: const TextStyle(color: ink, fontWeight: FontWeight.w700))), status]),
               const SizedBox(height: 7),
-              Text('SKU: ${p['sku'] ?? '—'}  •  ${integer(p['stock'])} units', style: const TextStyle(fontSize: 11, color: muted)),
+              Text('SKU: ${p['sku'] ?? 'â€”'}  â€¢  ${integer(p['stock'])} units', style: const TextStyle(fontSize: 11, color: muted)),
               const SizedBox(height: 5),
               Text(money(p['stockValue']), style: const TextStyle(color: purple, fontWeight: FontWeight.w800)),
             ])
           : Row(children: [
-              Expanded(flex: 4, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${p['name'] ?? 'Product'}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w700)), const SizedBox(height: 3), Text('${p['sku'] ?? '—'}', style: const TextStyle(fontSize: 10, color: muted))])),
+              Expanded(flex: 4, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${p['name'] ?? 'Product'}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w700)), const SizedBox(height: 3), Text('${p['sku'] ?? 'â€”'}', style: const TextStyle(fontSize: 10, color: muted))])),
               Expanded(flex: 2, child: Text('${integer(p['stock'])}', style: const TextStyle(color: ink, fontSize: 12))),
               Expanded(flex: 3, child: Text(money(p['stockValue']), style: const TextStyle(color: ink, fontWeight: FontWeight.w700, fontSize: 12))),
               Expanded(flex: 2, child: Align(alignment: Alignment.centerLeft, child: status)),

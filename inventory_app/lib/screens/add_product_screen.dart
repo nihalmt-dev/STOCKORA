@@ -2,6 +2,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:inventory_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class AddProductScreen extends StatefulWidget {
@@ -67,7 +68,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     try {
       final response = await http
           .post(
-            Uri.parse('http://localhost:5000/api/products'),
+            Uri.parse('${ApiConfig.baseUrl}/api/products'),
             headers: {
               'Content-Type': 'application/json',
               'Authorization': 'Bearer ${widget.token}',

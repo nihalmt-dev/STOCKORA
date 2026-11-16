@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:inventory_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -59,7 +60,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     setState(() { loading = true; errorMessage = null; });
     try {
       final response = await http.get(
-        Uri.parse('http://localhost:5000/api/customers'),
+        Uri.parse('${ApiConfig.baseUrl}/api/customers'),
         headers: headers,
       ).timeout(const Duration(seconds: 15));
       if (response.statusCode != 200) {
@@ -139,8 +140,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
               setDialogState(() => saving = true);
               try {
                 final url = editing
-                    ? 'http://localhost:5000/api/customers/${customer['_id']}'
-                    : 'http://localhost:5000/api/customers';
+                    ? '${ApiConfig.baseUrl}/api/customers/${customer['_id']}'
+                    : '${ApiConfig.baseUrl}/api/customers';
                 final body = jsonEncode({
                   'name': name.text.trim(),
                   'email': email.text.trim(),
@@ -274,7 +275,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     setState(() => busyId = id);
     try {
       final response = await http.delete(
-        Uri.parse('http://localhost:5000/api/customers/$id'), headers: headers,
+        Uri.parse('${ApiConfig.baseUrl}/api/customers/$id'), headers: headers,
       ).timeout(const Duration(seconds: 20));
       if (!mounted) return;
       if (response.statusCode == 200 || response.statusCode == 204) {

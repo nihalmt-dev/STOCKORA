@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:inventory_app/config/api_config.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -85,9 +86,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
     });
     try {
       final responses = await Future.wait([
-        http.get(Uri.parse('http://localhost:5000/api/orders'), headers: headers),
-        http.get(Uri.parse('http://localhost:5000/api/products'), headers: headers),
-        http.get(Uri.parse('http://localhost:5000/api/customers'), headers: headers),
+        http.get(Uri.parse('${ApiConfig.baseUrl}/api/orders'), headers: headers),
+        http.get(Uri.parse('${ApiConfig.baseUrl}/api/products'), headers: headers),
+        http.get(Uri.parse('${ApiConfig.baseUrl}/api/customers'), headers: headers),
       ]).timeout(const Duration(seconds: 15));
       for (final response in responses) {
         if (response.statusCode != 200) {
@@ -178,7 +179,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     setState(() => submitting = true);
     try {
       final response = await http.post(
-        Uri.parse('http://localhost:5000/api/orders'),
+        Uri.parse('${ApiConfig.baseUrl}/api/orders'),
         headers: headers,
         body: jsonEncode({
           'customerId': selectedCustomerId,
@@ -290,7 +291,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       subtitle: 'Choose a customer, add items, then confirm',
       icon: Icons.add_shopping_cart_rounded,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        stepLabel('STEP 1 · SELECT CUSTOMER'),
+        stepLabel('STEP 1 Â· SELECT CUSTOMER'),
         DropdownButtonFormField<String>(
           key: ValueKey('customer-$selectedCustomerId'),
           initialValue: customers.any((c) => c['_id'].toString() == selectedCustomerId) ? selectedCustomerId : null,
@@ -305,7 +306,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           onChanged: submitting ? null : (value) => setState(() => selectedCustomerId = value),
         ),
         const SizedBox(height: 23),
-        stepLabel('STEP 2 · ADD PRODUCTS'),
+        stepLabel('STEP 2 Â· ADD PRODUCTS'),
         DropdownButtonFormField<String>(
           key: ValueKey('product-$selectedProductId'),
           initialValue: products.any((p) => p['_id'].toString() == selectedProductId) ? selectedProductId : null,
@@ -315,7 +316,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           decoration: fieldDecoration('Product', icon: Icons.inventory_2_outlined),
           items: products.map((p) => DropdownMenuItem<String>(
             value: p['_id'].toString(),
-            child: Text('${p['name']} · ${p['stock']} in stock', overflow: TextOverflow.ellipsis),
+            child: Text('${p['name']} Â· ${p['stock']} in stock', overflow: TextOverflow.ellipsis),
           )).toList(),
           onChanged: submitting ? null : (value) => setState(() => selectedProductId = value),
         ),
@@ -340,7 +341,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           )),
         ]),
         const SizedBox(height: 24),
-        stepLabel('STEP 3 · REVIEW ORDER'),
+        stepLabel('STEP 3 Â· REVIEW ORDER'),
         if (cart.isEmpty)
           Container(
             width: double.infinity,
@@ -371,7 +372,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   Text('${item['name']}', maxLines: 2, overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: ink, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 5),
-                  Text('${item['quantity']} × ${money(item['price'])}',
+                  Text('${item['quantity']} Ã— ${money(item['price'])}',
                     style: const TextStyle(color: muted, fontSize: 12)),
                 ])),
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [

@@ -1,6 +1,7 @@
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:inventory_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 import 'add_product_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -58,7 +59,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     try {
       final response = await http.get(
-        Uri.parse('http://localhost:5000/api/products'),
+        Uri.parse('${ApiConfig.baseUrl}/api/products'),
         headers: {
           'Authorization': 'Bearer ${widget.token}',
         },
@@ -228,7 +229,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 try {
                   final response = await http.put(
                     Uri.parse(
-                      'http://localhost:5000/api/products/$id',
+                      '${ApiConfig.baseUrl}/api/products/$id',
                     ),
                     headers: {
                       'Content-Type': 'application/json',
@@ -383,7 +384,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     try {
       final response = await http.delete(
-        Uri.parse('http://localhost:5000/api/products/$id'),
+        Uri.parse('${ApiConfig.baseUrl}/api/products/$id'),
         headers: {
           'Authorization': 'Bearer ${widget.token}',
         },

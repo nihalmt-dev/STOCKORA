@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:inventory_app/config/api_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 
@@ -63,7 +64,7 @@ class _AuthCheckerState extends State<AuthChecker> {
 
       // Verify that the saved token still works.
       final response = await http.get(
-        Uri.parse('http://localhost:5000/api/dashboard/stats'),
+        Uri.parse('${ApiConfig.baseUrl}/api/dashboard/stats'),
         headers: {
           'Authorization': 'Bearer $token',
         },

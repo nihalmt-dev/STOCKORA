@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:inventory_app/config/api_config.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -158,7 +159,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       const Icon(Icons.check_circle_rounded,
                         size: 13, color: Color(0xFF86EFAC)),
                       const SizedBox(width: 7),
-                      Text('${role.toUpperCase()} · Workspace active',
+                      Text('${role.toUpperCase()} Â· Workspace active',
                         style: const TextStyle(color: Colors.white,
                           fontSize: 11, fontWeight: FontWeight.w600)),
                     ]),
@@ -222,7 +223,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     });
     try {
       final response = await http.get(
-        Uri.parse('http://localhost:5000/api/dashboard/stats'),
+        Uri.parse('${ApiConfig.baseUrl}/api/dashboard/stats'),
         headers: {
           'Authorization': 'Bearer ${widget.token}',
           'Cache-Control': 'no-cache',
@@ -263,7 +264,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _fetchingRestocks = true;
     try {
       final response = await http.get(
-        Uri.parse('http://localhost:5000/api/inventory/restock-requests'),
+        Uri.parse('${ApiConfig.baseUrl}/api/inventory/restock-requests'),
         headers: {'Authorization': 'Bearer ${widget.token}'},
       ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
@@ -302,7 +303,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (confirmed != true || !mounted) return;
     try {
       final response = await http.patch(
-        Uri.parse('http://localhost:5000/api/inventory/restock-requests/$id/resolve'),
+        Uri.parse('${ApiConfig.baseUrl}/api/inventory/restock-requests/$id/resolve'),
         headers: {'Authorization': 'Bearer ${widget.token}'},
       ).timeout(const Duration(seconds: 15));
       if (!mounted) return;
@@ -421,7 +422,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                               const SizedBox(height: 8),
                               Text(
                                 raw['product'] is Map
-                                    ? 'Stock: ${raw['product']['stock'] ?? '-'}  ·  Threshold: ${raw['product']['lowStockThreshold'] ?? '-'}'
+                                    ? 'Stock: ${raw['product']['stock'] ?? '-'}  Â·  Threshold: ${raw['product']['lowStockThreshold'] ?? '-'}'
                                     : 'Product details unavailable',
                                 style: const TextStyle(color: muted,
                                     fontSize: 12),
@@ -1313,7 +1314,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                           style: const TextStyle(color: ink,
                             fontWeight: FontWeight.w800, fontSize: 15)),
                         const SizedBox(height: 4),
-                        Text('${role.toUpperCase()} · STOCKORA',
+                        Text('${role.toUpperCase()} Â· STOCKORA',
                           style: const TextStyle(color: muted,
                             fontSize: 11, fontWeight: FontWeight.w600)),
                       ],

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:inventory_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -74,7 +75,7 @@ class _UsersScreenState extends State<UsersScreen> {
     setState(() { loading = true; error = null; });
     try {
       final response = await http.get(
-        Uri.parse('http://localhost:5000/api/users'), headers: headers,
+        Uri.parse('${ApiConfig.baseUrl}/api/users'), headers: headers,
       ).timeout(const Duration(seconds: 15));
       if (response.statusCode != 200) throw Exception(_message(response, 'Unable to load users'));
       final data = jsonDecode(response.body);
@@ -141,7 +142,7 @@ class _UsersScreenState extends State<UsersScreen> {
             if (!formKey.currentState!.validate()) return;
             update(() => saving = true);
             try {
-              final response = await http.post(Uri.parse('http://localhost:5000/api/users'), headers: headers,
+              final response = await http.post(Uri.parse('${ApiConfig.baseUrl}/api/users'), headers: headers,
                 body: jsonEncode({'name': name.text.trim(), 'email': email.text.trim(), 'password': password.text, 'role': role}),
               ).timeout(const Duration(seconds: 15));
               if (!mounted || !dialogContext.mounted) return;
@@ -171,7 +172,7 @@ class _UsersScreenState extends State<UsersScreen> {
     }
     try {
       final endpoint = role != null ? 'role' : 'status';
-      final response = await http.patch(Uri.parse('http://localhost:5000/api/users/$id/$endpoint'),
+      final response = await http.patch(Uri.parse('${ApiConfig.baseUrl}/api/users/$id/$endpoint'),
         headers: headers, body: jsonEncode(role != null ? {'role': role} : {'isActive': active}),
       ).timeout(const Duration(seconds: 15));
       if (!mounted) return;
@@ -228,7 +229,7 @@ class _UsersScreenState extends State<UsersScreen> {
     if (confirmed != true || !mounted) return;
     try {
       final response = await http.delete(
-        Uri.parse('http://localhost:5000/api/users/$id'),
+        Uri.parse('${ApiConfig.baseUrl}/api/users/$id'),
         headers: headers,
       ).timeout(const Duration(seconds: 15));
       if (!mounted) return;

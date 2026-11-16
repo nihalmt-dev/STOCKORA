@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:inventory_app/config/api_config.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -79,9 +80,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
     });
     try {
       final responses = await Future.wait([
-        http.get(Uri.parse('http://localhost:5000/api/products'), headers: headers),
-        http.get(Uri.parse('http://localhost:5000/api/inventory/movements'), headers: headers),
-        http.get(Uri.parse('http://localhost:5000/api/inventory/low-stock'), headers: headers),
+        http.get(Uri.parse('${ApiConfig.baseUrl}/api/products'), headers: headers),
+        http.get(Uri.parse('${ApiConfig.baseUrl}/api/inventory/movements'), headers: headers),
+        http.get(Uri.parse('${ApiConfig.baseUrl}/api/inventory/low-stock'), headers: headers),
       ]).timeout(const Duration(seconds: 15));
       for (final response in responses) {
         if (response.statusCode != 200) {
@@ -139,7 +140,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     setState(() => submitting = true);
     try {
       final response = await http.post(
-        Uri.parse('http://localhost:5000/api/inventory/movement'),
+        Uri.parse('${ApiConfig.baseUrl}/api/inventory/movement'),
         headers: headers,
         body: jsonEncode({
           'productId': selectedProductId,
@@ -175,7 +176,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     setState(() => requestingProducts.add(productId));
     try {
       final response = await http.post(
-        Uri.parse('http://localhost:5000/api/inventory/restock-requests'),
+        Uri.parse('${ApiConfig.baseUrl}/api/inventory/restock-requests'),
         headers: headers,
         body: jsonEncode({'productId': productId}),
       ).timeout(const Duration(seconds: 20));

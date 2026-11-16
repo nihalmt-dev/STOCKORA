@@ -2,6 +2,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:inventory_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -76,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen>
     try {
       final response = await http
           .post(
-            Uri.parse('http://localhost:5000/api/auth/login'),
+            Uri.parse('${ApiConfig.baseUrl}/api/auth/login'),
             headers: {
               'Content-Type': 'application/json',
             },
@@ -435,7 +436,7 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                           const SizedBox(height: 28),
                           const Text(
-                            '© 2026 STOCKORA • Inventory made intelligent',
+                            'Â© 2026 STOCKORA â€¢ Inventory made intelligent',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: muted,
